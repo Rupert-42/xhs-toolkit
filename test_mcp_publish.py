@@ -20,7 +20,14 @@ logger = logging.getLogger(__name__)
 
 async def call_mcp_tool(tool_name: str, params: dict):
     """调用MCP工具"""
-    url = "http://localhost:8000/sse"
+    # 从配置读取端口
+    import os
+    from pathlib import Path
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.core.config import XHSConfig
+    config = XHSConfig()
+    url = f"http://localhost:{config.server_port}/sse"
     
     # 构建JSON-RPC请求
     request_data = {
@@ -107,8 +114,14 @@ async def test_publish():
 
 async def main():
     """主函数"""
+    from pathlib import Path
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.core.config import XHSConfig
+    config = XHSConfig()
+    
     logger.info("🚀 MCP测试程序启动")
-    logger.info("请确保MCP服务器正在运行 (端口8000)")
+    logger.info(f"请确保MCP服务器正在运行 (端口{config.server_port})")
     
     await test_publish()
     

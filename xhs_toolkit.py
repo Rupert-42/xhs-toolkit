@@ -110,18 +110,28 @@ def cookie_command(action: str) -> bool:
             safe_print("   3. 确认小红书网站可以正常访问")
         return False
 
-def server_command(action: str, port: int = 8000, host: str = "0.0.0.0") -> bool:
+def server_command(action: str, port: int = None, host: str = None) -> bool:
     """
     服务器管理命令
     
     Args:
         action: 操作类型 (start, stop, status)
-        port: 服务器端口
-        host: 服务器主机
+        port: 服务器端口 (如果为None，从配置读取)
+        host: 服务器主机 (如果为None，从配置读取)
         
     Returns:
         操作是否成功
     """
+    # 创建配置实例以读取默认值
+    from src.core.config import XHSConfig
+    config = XHSConfig()
+    
+    # 使用配置文件中的默认值，除非显式指定
+    if port is None:
+        port = config.server_port
+    if host is None:
+        host = config.server_host
+    
     if action == "start":
         safe_print("🚀 启动MCP服务器...")
         
@@ -407,8 +417,8 @@ def main():
     server_parser = subparsers.add_parser("server", help="MCP服务器管理")
     server_parser.add_argument("action", choices=["start", "stop", "status"], 
                               help="操作类型")
-    server_parser.add_argument("--port", type=int, default=8000, help="服务器端口")
-    server_parser.add_argument("--host", default="0.0.0.0", help="服务器主机")
+    server_parser.add_argument("--port", type=int, default=None, help="服务器端口 (默认从配置读取)")
+    server_parser.add_argument("--host", default=None, help="服务器主机 (默认从配置读取)")
     
     # 发布命令
     publish_parser = subparsers.add_parser("publish", help="发布笔记")
