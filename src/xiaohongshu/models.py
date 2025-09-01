@@ -6,6 +6,10 @@
 
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, field_validator
+import logging
+
+# 设置logger
+logger = logging.getLogger(__name__)
 
 # 尝试相对导入，失败则使用绝对导入
 try:
@@ -51,17 +55,30 @@ class XHSNote(BaseModel):
         if v is None:
             return v
         
+        # 添加调试日志
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔍 验证图片列表: {v}")
+        
         # 限制图片数量
         if len(v) > 9:
             raise ValueError("图片数量不能超过9张")
         
-        # 检查路径格式
+        # 检查路径格式（跳过URL的验证，因为它们会在async_smart_create中被处理）
         import os
         for image_path in v:
+            # 如果是URL，跳过本地文件验证
+            if isinstance(image_path, str) and image_path.startswith(('http://', 'https://')):
+                logger.info(f"🌐 检测到URL图片，跳过本地验证: {image_path}")
+                continue
+            
+            # 本地文件验证
             if not os.path.isabs(image_path):
                 raise ValueError(f"图片路径必须是绝对路径: {image_path}")
             if not os.path.exists(image_path):
                 raise ValueError(f"图片文件不存在: {image_path}")
+            
+            logger.info(f"✅ 本地图片验证通过: {image_path}")
         
         return v
     
@@ -222,6 +239,10 @@ class XHSNote(BaseModel):
         Returns:
             XHSNote实例
         """
+        logger.info(f"📝 异步创建笔记 - 标题: {title}")
+        logger.info(f"📸 原始图片输入: {images}")
+        logger.info(f"🎬 原始视频输入: {videos}")
+        
         # 智能解析话题
         if topics:
             if isinstance(topics, str):
@@ -233,16 +254,22 @@ class XHSNote(BaseModel):
         else:
             topic_list = None
         
+        logger.info(f"🏷️ 解析后的话题: {topic_list}")
+        
         # 处理图片（支持URL）
         processed_images = None
         if images:
+            logger.info(f"🔄 开始处理图片...")
             from ..utils.image_processor import ImageProcessor
             processor = ImageProcessor()
             processed_images = await processor.process_images(images)
+            logger.info(f"✅ 图片处理完成: {processed_images}")
         
         # 智能解析视频路径（暂时只支持本地文件）
         video_list = smart_parse_file_paths(videos) if videos else None
+        logger.info(f"🎥 解析后的视频: {video_list}")
         
+        logger.info(f"🚀 创建XHSNote对象...")
         return cls(
             title=title,
             content=content,
