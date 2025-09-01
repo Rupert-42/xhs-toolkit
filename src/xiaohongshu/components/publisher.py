@@ -273,8 +273,9 @@ class XHSPublisher(IPublisher):
             logger.info("🚀 点击发布按钮...")
             publish_button.click()
             
-            # 等待发布完成
-            await asyncio.sleep(XHSConfig.DEFAULT_WAIT_TIME)
+            # 等待发布完成，使用更长的等待时间
+            logger.info("⏳ 等待发布完成，请耐心等待...")
+            await asyncio.sleep(XHSConfig.PUBLISH_WAIT_TIME)
             
             # 检查发布结果
             return await self._check_publish_result(note)
@@ -287,13 +288,42 @@ class XHSPublisher(IPublisher):
     
     async def _check_publish_result(self, note: XHSNote) -> XHSPublishResult:
         """检查发布结果"""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        
         try:
             driver = self.browser_manager.driver
+            wait = WebDriverWait(driver, XHSConfig.SHORT_WAIT_TIME)
+            
+            # 等待页面跳转或出现成功提示
+            try:
+                # 检查是否有成功提示
+                success_indicators = [
+                    "//div[contains(text(), '发布成功')]",
+                    "//div[contains(text(), '笔记已发布')]",
+                    "//div[contains(text(), '审核中')]",
+                    "//div[contains(@class, 'success')]"
+                ]
+                
+                for indicator in success_indicators:
+                    try:
+                        element = driver.find_element(By.XPATH, indicator)
+                        if element and element.is_displayed():
+                            logger.info("✅ 检测到发布成功提示")
+                            break
+                    except:
+                        continue
+                        
+            except:
+                pass
+            
+            # 获取当前URL
             current_url = driver.current_url
             
-            # 简单的成功检查逻辑
-            # 可以根据实际情况完善检查逻辑
-            if "success" in current_url or "complete" in current_url:
+            # 检查URL变化
+            if "creator" not in current_url or "publish" not in current_url:
+                # URL已经跳转，说明发布成功
                 logger.info("✅ 笔记发布成功！")
                 return XHSPublishResult(
                     success=True,
@@ -302,7 +332,8 @@ class XHSPublisher(IPublisher):
                     final_url=current_url
                 )
             else:
-                logger.info("🎉 笔记发布完成，正在等待审核...")
+                # 仍在发布页，但可能已经提交
+                logger.info("🎉 笔记已提交，等待审核...")
                 return XHSPublishResult(
                     success=True,
                     message="笔记已提交，等待审核",
