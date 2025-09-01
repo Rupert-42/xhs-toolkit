@@ -376,44 +376,147 @@ class XHSClient:
         try:
             logger.info("📝 填写内容...")
             
-            # 尝试多个内容选择器
+            # 等待页面加载完成
+            await asyncio.sleep(2)
+            
+            # 尝试多个内容选择器（根据最新的小红书页面结构）
             content_selectors = [
-                ".ql-editor",
-                "[placeholder*='内容']",
-                "[placeholder*='content']",
-                "textarea",
-                ".content-input",
-                ".editor"
+                ".ql-editor",  # Quill编辑器
+                "div[contenteditable='true']",  # 可编辑div
+                ".content-editor",  # 内容编辑器
+                ".editor-content",  # 编辑器内容
+                "[placeholder*='分享']",  # 包含"分享"的placeholder
+                "[placeholder*='内容']",  # 包含"内容"的placeholder
+                "[placeholder*='正文']",  # 包含"正文"的placeholder
+                "[data-placeholder*='分享']",  # data-placeholder属性
+                ".note-editor",  # 笔记编辑器
+                ".text-editor",  # 文本编辑器
+                "textarea",  # 普通文本框
+                ".content-input",  # 内容输入
+                ".editor"  # 通用编辑器
+            ]
+            
+            # 也尝试通过XPath查找
+            xpath_selectors = [
+                "//div[@contenteditable='true']",
+                "//div[contains(@class, 'editor')]",
+                "//div[contains(@class, 'ql-editor')]",
+                "//div[contains(@placeholder, '分享')]",
+                "//div[contains(@data-placeholder, '分享')]"
             ]
             
             content_input = None
+            
+            # 先尝试CSS选择器
             for selector in content_selectors:
                 try:
-                    content_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
-                    if content_input.is_displayed():
-                        logger.info(f"✅ 找到内容输入框: {selector}")
+                    logger.debug(f"尝试CSS选择器: {selector}")
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            # 检查是否是标题框（避免选中标题框）
+                            class_name = element.get_attribute('class') or ''
+                            if 'title' not in class_name.lower() and 'd-text' not in class_name:
+                                content_input = element
+                                logger.info(f"✅ 找到内容输入框 (CSS): {selector}")
+                                break
+                    if content_input:
                         break
-                except:
+                except Exception as e:
+                    logger.debug(f"CSS选择器 {selector} 失败: {e}")
                     continue
             
+            # 如果CSS选择器失败，尝试XPath
             if not content_input:
-                raise PublishError("无法找到内容输入框", publish_step="查找内容输入框")
+                for xpath in xpath_selectors:
+                    try:
+                        logger.debug(f"尝试XPath选择器: {xpath}")
+                        elements = driver.find_elements(By.XPATH, xpath)
+                        for element in elements:
+                            if element.is_displayed() and element.is_enabled():
+                                # 检查是否是标题框
+                                class_name = element.get_attribute('class') or ''
+                                if 'title' not in class_name.lower() and 'd-text' not in class_name:
+                                    content_input = element
+                                    logger.info(f"✅ 找到内容输入框 (XPath): {xpath}")
+                                    break
+                        if content_input:
+                            break
+                    except Exception as e:
+                        logger.debug(f"XPath选择器 {xpath} 失败: {e}")
+                        continue
             
-            content_input.clear()
+            if not content_input:
+                # 尝试截图以便调试
+                self.browser_manager.take_screenshot("content_input_not_found.png")
+                # 输出页面源码片段用于调试
+                logger.debug("页面包含的可编辑元素:")
+                editable_elements = driver.find_elements(By.CSS_SELECTOR, "[contenteditable], textarea, input[type='text']")
+                for elem in editable_elements[:5]:  # 只输出前5个
+                    logger.debug(f"  - Tag: {elem.tag_name}, Class: {elem.get_attribute('class')}, Placeholder: {elem.get_attribute('placeholder')}")
+                raise PublishError("无法找到内容输入框，可能页面结构已更新", publish_step="查找内容输入框")
+            
+            # 点击内容输入框以激活
+            try:
+                content_input.click()
+                await asyncio.sleep(0.5)
+                logger.info("✅ 已点击并激活内容输入框")
+            except:
+                logger.warning("⚠️ 无法点击内容输入框，尝试继续")
+            
+            # 清空内容（对于contenteditable元素）
+            try:
+                # 对于contenteditable元素，使用JavaScript清空
+                if content_input.get_attribute('contenteditable') == 'true':
+                    driver.execute_script("arguments[0].innerHTML = '';", content_input)
+                    logger.info("✅ 已清空contenteditable内容")
+                else:
+                    content_input.clear()
+                    logger.info("✅ 已清空输入框内容")
+            except:
+                logger.warning("⚠️ 清空内容失败，尝试继续")
             
             # 处理内容，支持换行
             from selenium.webdriver.common.keys import Keys
             cleaned_content = clean_text_for_browser(note.content)
+            logger.info(f"📝 准备输入内容 (长度: {len(cleaned_content)} 字符)")
             
-            # 分段输入，正确处理换行
-            lines = cleaned_content.split('\n')
-            for i, line in enumerate(lines):
-                content_input.send_keys(line)
-                if i < len(lines) - 1:
-                    content_input.send_keys(Keys.ENTER)
-                await asyncio.sleep(0.1)  # 短暂等待
+            # 根据元素类型选择输入方式
+            if content_input.get_attribute('contenteditable') == 'true':
+                # 对于contenteditable元素，使用JavaScript设置内容
+                logger.info("使用JavaScript方式输入内容...")
+                # 将换行符转换为<br>标签
+                html_content = cleaned_content.replace('\n', '<br>')
+                driver.execute_script("arguments[0].innerHTML = arguments[1];", content_input, html_content)
+                # 触发input事件
+                driver.execute_script("""
+                    var event = new Event('input', { bubbles: true });
+                    arguments[0].dispatchEvent(event);
+                """, content_input)
+                await asyncio.sleep(0.5)
+                logger.info("✅ 已通过JavaScript输入内容")
+            else:
+                # 对于普通输入框，分段输入
+                logger.info("使用键盘方式输入内容...")
+                lines = cleaned_content.split('\n')
+                for i, line in enumerate(lines):
+                    content_input.send_keys(line)
+                    if i < len(lines) - 1:
+                        content_input.send_keys(Keys.ENTER)
+                    await asyncio.sleep(0.1)  # 短暂等待
+                logger.info("✅ 已通过键盘输入内容")
             
-            logger.info("✅ 内容已填写")
+            # 验证内容是否成功输入
+            await asyncio.sleep(0.5)
+            if content_input.get_attribute('contenteditable') == 'true':
+                actual_content = content_input.get_attribute('innerText') or content_input.get_attribute('innerHTML')
+            else:
+                actual_content = content_input.get_attribute('value')
+            
+            if actual_content and len(actual_content.strip()) > 0:
+                logger.info(f"✅ 内容已成功填写 (实际长度: {len(actual_content)} 字符)")
+            else:
+                logger.warning("⚠️ 内容可能未成功填写，但继续流程")
             
         except Exception as e:
             raise PublishError(f"填写内容失败: {str(e)}", publish_step="填写内容") from e
