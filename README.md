@@ -110,11 +110,11 @@ services:
     environment:
       - SE_VNC_NO_PASSWORD=1
     volumes:
-      - ./chrome-data:/home/seluser  # 更换挂载路径，确保权限
+      - ./chrome-data:.  # 更换挂载路径，确保权限
     restart: unless-stopped
     command: >
-      bash -c "mkdir -p /home/seluser/.config/google-chrome &&
-              touch /home/seluser/.config/google-chrome/test.txt &&
+      bash -c "mkdir -p ./.config/google-chrome &&
+              touch ./.config/google-chrome/test.txt &&
               /opt/bin/entry_point.sh"
 ```
 
