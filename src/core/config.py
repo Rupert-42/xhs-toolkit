@@ -222,7 +222,7 @@ WEBDRIVER_CHROME_DRIVER={self.chromedriver_path or "自动检测"}
 
 # MCP服务器配置
 SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
+SERVER_PORT=18000
 
 # Cookies文件路径
 COOKIES_FILE=xhs_cookies.json
@@ -243,7 +243,7 @@ ENABLE_REMOTE_BROWSER=false
 # 远程浏览器主机地址（通常为localhost或远程服务器IP）
 REMOTE_BROWSER_HOST=localhost
 # 远程浏览器调试端口（Chrome启动时的--remote-debugging-port参数）
-REMOTE_BROWSER_PORT=9222
+REMOTE_BROWSER_PORT={self.remote_browser_port}
 
 # 超时设置（秒）
 TIMEOUT=30

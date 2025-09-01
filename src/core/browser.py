@@ -124,7 +124,7 @@ class ChromeDriverManager:
             chrome_options.add_argument('--disable-features=TranslateUI')
             
             # 添加调试端口（有助于无头模式稳定性）
-            chrome_options.add_argument('--remote-debugging-port=9222')
+            chrome_options.add_argument(f'--remote-debugging-port={self.config.remote_browser_port}')
             
             # 窗口设置（即使无头模式也设置）
             chrome_options.add_argument('--start-maximized')
