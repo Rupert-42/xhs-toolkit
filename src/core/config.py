@@ -141,9 +141,24 @@ class XHSConfig:
         if env_driver_path and os.path.exists(env_driver_path):
             return env_driver_path
         
-        # 尝试在PATH中查找
+        # 优先检查homebrew安装的最新版本（arm64 Mac）
+        homebrew_path = "/opt/homebrew/bin/chromedriver"
+        if os.path.exists(homebrew_path):
+            logger.debug(f"使用Homebrew ChromeDriver: {homebrew_path}")
+            return homebrew_path
+        
+        # 检查homebrew x86_64版本
+        homebrew_x86_path = "/usr/local/opt/chromedriver/bin/chromedriver"
+        if os.path.exists(homebrew_x86_path):
+            logger.debug(f"使用Homebrew x86_64 ChromeDriver: {homebrew_x86_path}")
+            return homebrew_x86_path
+        
+        # 最后才尝试在PATH中查找（可能找到旧版本）
         chromedriver_path = shutil.which("chromedriver")
         if chromedriver_path:
+            # 检查版本，如果是/usr/local/bin下的可能是旧版本
+            if "/usr/local/bin" in chromedriver_path:
+                logger.warning(f"检测到可能的旧版ChromeDriver: {chromedriver_path}")
             return chromedriver_path
         
         # 返回空字符串，让selenium自己处理
