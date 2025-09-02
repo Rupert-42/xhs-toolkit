@@ -1,0 +1,112 @@
+[
+  {
+    "id": "D09CMEQV17W",
+    "name": "@cursor",
+    "topic": "",
+    "purpose": "DM with Cursor",
+    "memberCount": 2,
+    "mpim": false,
+    "im": true,
+    "private": false
+  },
+  {
+    "id": "D09CJ9N0AKG",
+    "name": "@sdgrtong",
+    "topic": "",
+    "purpose": "DM with Rupert",
+    "memberCount": 2,
+    "mpim": false,
+    "im": true,
+    "private": false
+  },
+  {
+    "id": "D09CCJY6K1R",
+    "name": "@slackbot",
+    "topic": "",
+    "purpose": "DM with Slackbot",
+    "memberCount": 2,
+    "mpim": false,
+    "im": true,
+    "private": false
+  },
+  {
+    "id": "C09CQST10MV",
+    "name": "#agent-notifications",
+    "topic": "",
+    "purpose": "",
+    "memberCount": 1,
+    "mpim": false,
+    "im": false,
+    "private": false
+  },
+  {
+    "id": "D09CMEQV17W",
+    "name": "@cursor",
+    "topic": "",
+    "purpose": "DM with Cursor",
+    "memberCount": 2,
+    "mpim": false,
+    "im": true,
+    "private": false
+  },
+  {
+    "id": "D09CJ9N0AKG",
+    "name": "@sdgrtong",
+    "topic": "",
+    "purpose": "DM with Rupert",
+    "memberCount": 2,
+    "mpim": false,
+    "im": true,
+    "private": false
+  },
+  {
+    "id": "D09CCJY6K1R",
+    "name": "@slackbot",
+    "topic": "",
+    "purpose": "DM with Slackbot",
+    "memberCount": 2,
+    "mpim": false,
+    "im": true,
+    "private": false
+  },
+  {
+    "id": "C09CH0GBQNN",
+    "name": "#所有-xhs-mcn",
+    "topic": "",
+    "purpose": "分享有关公司新闻、即将举行的活动或值得表扬的队友的公告和更新。⭐",
+    "memberCount": 1,
+    "mpim": false,
+    "im": false,
+    "private": false
+  },
+  {
+    "id": "C09CJ9VTAQ6",
+    "name": "#新频道",
+    "topic": "",
+    "purpose": "这个频道适用于 #新频道 的所有内容。与你的团队一起召开会议、共享文档和做出决策。",
+    "memberCount": 1,
+    "mpim": false,
+    "im": false,
+    "private": false
+  },
+  {
+    "id": "C09CMED80KW",
+    "name": "#社交",
+    "topic": "",
+    "purpose": "其他频道是工作频道。这个频道才是娱乐频道。了解你的队友，展现你轻松的一面。🎈",
+    "memberCount": 1,
+    "mpim": false,
+    "im": false,
+    "private": false
+  },
+  {
+    "id": "C09C708LJ87",
+    "name": "#研发部",
+    "topic": "",
+    "purpose": "",
+    "memberCount": 2,
+    "mpim": false,
+    "im": false,
+    "private": true
+  }
+]
