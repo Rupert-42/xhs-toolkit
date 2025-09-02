@@ -478,35 +478,49 @@ class XHSClient:
             
             # 处理内容，支持换行
             from selenium.webdriver.common.keys import Keys
-            cleaned_content = clean_text_for_browser(note.content)
+            cleaned_content = note.content  # 不使用clean_text_for_browser，保留原始换行
             logger.info(f"📝 准备输入内容 (长度: {len(cleaned_content)} 字符)")
             
-            # 根据元素类型选择输入方式
-            if content_input.get_attribute('contenteditable') == 'true':
-                # 对于contenteditable元素，使用JavaScript设置内容
-                logger.info("使用JavaScript方式输入内容...")
-                # 将内容按行分割，每行包裹在<div>标签中（符合富文本编辑器标准）
+            # 简化处理：直接使用键盘输入，逐行处理
+            try:
+                # 先点击聚焦
+                content_input.click()
+                await asyncio.sleep(0.2)
+                
+                # 清空可能存在的内容
+                if content_input.get_attribute('contenteditable') == 'true':
+                    driver.execute_script("arguments[0].innerHTML = '';", content_input)
+                else:
+                    content_input.clear()
+                
+                await asyncio.sleep(0.2)
+                
+                # 逐行输入内容，使用原生的Enter键换行
                 lines = cleaned_content.split('\n')
-                # 小红书编辑器使用<div>标签表示段落，空行用<div><br></div>表示
-                html_content = ''.join([f'<div>{line}</div>' if line else '<div><br></div>' for line in lines])
-                driver.execute_script("arguments[0].innerHTML = arguments[1];", content_input, html_content)
-                # 触发input事件
-                driver.execute_script("""
-                    var event = new Event('input', { bubbles: true });
-                    arguments[0].dispatchEvent(event);
-                """, content_input)
-                await asyncio.sleep(0.5)
-                logger.info("✅ 已通过JavaScript输入内容（保留换行）")
-            else:
-                # 对于普通输入框，分段输入
-                logger.info("使用键盘方式输入内容...")
-                lines = cleaned_content.split('\n')
+                logger.info(f"📋 内容包含 {len(lines)} 行")
+                
                 for i, line in enumerate(lines):
-                    content_input.send_keys(line)
-                    if i < len(lines) - 1:
-                        content_input.send_keys(Keys.ENTER)
-                    await asyncio.sleep(0.1)  # 短暂等待
-                logger.info("✅ 已通过键盘输入内容")
+                    if line:  # 如果行有内容
+                        # 使用原始内容，不做额外清理
+                        content_input.send_keys(line)
+                    
+                    if i < len(lines) - 1:  # 不是最后一行就换行
+                        # 尝试多种换行方式
+                        if content_input.get_attribute('contenteditable') == 'true':
+                            # 对于富文本编辑器，使用Shift+Enter
+                            content_input.send_keys(Keys.SHIFT + Keys.ENTER)
+                        else:
+                            # 对于普通输入框，使用Enter
+                            content_input.send_keys(Keys.ENTER)
+                    
+                    await asyncio.sleep(0.05)  # 每行后短暂等待
+                
+                logger.info("✅ 已通过键盘输入内容（保留换行）")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ 键盘输入出错，尝试直接发送整个内容: {e}")
+                # 如果逐行输入失败，尝试直接发送整个内容
+                content_input.send_keys(cleaned_content)
             
             # 验证内容是否成功输入
             await asyncio.sleep(0.5)
