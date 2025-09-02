@@ -505,15 +505,10 @@ class XHSClient:
                         content_input.send_keys(line)
                     
                     if i < len(lines) - 1:  # 不是最后一行就换行
-                        # 尝试多种换行方式
-                        if content_input.get_attribute('contenteditable') == 'true':
-                            # 对于富文本编辑器，使用Shift+Enter
-                            content_input.send_keys(Keys.SHIFT + Keys.ENTER)
-                        else:
-                            # 对于普通输入框，使用Enter
-                            content_input.send_keys(Keys.ENTER)
+                        # 直接使用Enter创建硬换行（新段落），这样在小红书发布时会保留换行
+                        content_input.send_keys(Keys.ENTER)
                     
-                    await asyncio.sleep(0.05)  # 每行后短暂等待
+                    await asyncio.sleep(0.1)  # 每行后短暂等待
                 
                 logger.info("✅ 已通过键盘输入内容（保留换行）")
                 
