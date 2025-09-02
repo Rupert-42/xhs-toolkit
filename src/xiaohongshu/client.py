@@ -485,8 +485,10 @@ class XHSClient:
             if content_input.get_attribute('contenteditable') == 'true':
                 # 对于contenteditable元素，使用JavaScript设置内容
                 logger.info("使用JavaScript方式输入内容...")
-                # 将换行符转换为<br>标签
-                html_content = cleaned_content.replace('\n', '<br>')
+                # 将内容按行分割，每行包裹在<div>标签中（符合富文本编辑器标准）
+                lines = cleaned_content.split('\n')
+                # 小红书编辑器使用<div>标签表示段落，空行用<div><br></div>表示
+                html_content = ''.join([f'<div>{line}</div>' if line else '<div><br></div>' for line in lines])
                 driver.execute_script("arguments[0].innerHTML = arguments[1];", content_input, html_content)
                 # 触发input事件
                 driver.execute_script("""
@@ -494,7 +496,7 @@ class XHSClient:
                     arguments[0].dispatchEvent(event);
                 """, content_input)
                 await asyncio.sleep(0.5)
-                logger.info("✅ 已通过JavaScript输入内容")
+                logger.info("✅ 已通过JavaScript输入内容（保留换行）")
             else:
                 # 对于普通输入框，分段输入
                 logger.info("使用键盘方式输入内容...")

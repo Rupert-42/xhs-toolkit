@@ -44,9 +44,11 @@ class XHSNote(BaseModel):
         """验证内容"""
         if not v or not v.strip():
             raise ValueError("内容不能为空")
-        if len(v.strip()) > 1000:
+        # 使用原始长度而不是strip后的长度来检查
+        if len(v) > 1000:
             raise ValueError("内容长度不能超过1000个字符")
-        return v.strip()
+        # 不使用strip()以保留换行符，只返回原始内容
+        return v
     
     @field_validator('images')
     @classmethod
