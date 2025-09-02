@@ -20,7 +20,7 @@ from src.core.exceptions import XHSToolkitError, format_error_message
 from src.auth.cookie_manager import CookieManager
 from src.server.mcp_server import MCPServer
 from src.xiaohongshu.client import XHSClient
-from src.xiaohongshu.models import XHSNote
+from src.xiaohongshu.models import XHSNote, XHSPublishResult
 from src.utils.logger import setup_logger, get_logger
 from src.utils.text_utils import safe_print
 from src.cli.manual_commands import manual_command, add_manual_parser
@@ -277,8 +277,9 @@ async def publish_command(title: str, content: str, topics: str = "",
     logger.info("🚀 开始发布小红书笔记")
     
     try:
-        # 检查和初始化组件
-        await ensure_component_initialization()
+        # 初始化配置和客户端
+        config = XHSConfig()
+        client = XHSClient(config)
         
         # 创建笔记对象，使用智能解析
         note = await XHSNote.async_smart_create(

@@ -84,8 +84,10 @@ xhs_cookies.json
 
 # 数据
 data/creator_db/
+google-chrome-data/
 
 # 其他
 .cursorrules
 .cursorignore
 .cursorignore
+
