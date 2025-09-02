@@ -122,7 +122,7 @@ def parse_file_paths_string(paths_string: str) -> List[str]:
     return paths
 
 
-def smart_parse_file_paths(paths_input) -> List[str]:
+def smart_parse_file_paths(paths_input, file_type: str = "file") -> List[str]:
     """
     智能解析文件路径，支持多种输入格式
     
@@ -135,6 +135,7 @@ def smart_parse_file_paths(paths_input) -> List[str]:
     
     Args:
         paths_input: 各种格式的路径输入
+        file_type: 文件类型（"file", "image", "video"），用于错误提示
         
     Returns:
         文件路径列表

@@ -11,8 +11,9 @@ import asyncio
 import aiohttp
 import tempfile
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple
 import uuid
+import json
 
 from .logger import get_logger
 
@@ -22,12 +23,13 @@ logger = get_logger(__name__)
 class ImageProcessor:
     """图片处理器，支持本地路径和URL下载"""
     
-    def __init__(self, temp_dir: str = None):
+    def __init__(self, temp_dir: str = None, base_dir: str = None):
         """
         初始化图片处理器
         
         Args:
             temp_dir: 临时文件目录路径
+            base_dir: 用于解析相对路径的基础目录
         """
         # 设置临时目录
         if temp_dir:
@@ -37,28 +39,35 @@ class ImageProcessor:
             self.temp_dir = Path(tempfile.gettempdir()) / "xhs_images"
         
         self.temp_dir.mkdir(exist_ok=True, parents=True)
+        
+        # 设置基础目录（用于相对路径解析）
+        self.base_dir = Path(base_dir) if base_dir else Path.cwd()
+        
         logger.info(f"图片处理器初始化，临时目录: {self.temp_dir}")
+        logger.info(f"基础目录（用于相对路径）: {self.base_dir}")
     
-    async def process_images(self, images_input: Union[str, List, None]) -> List[str]:
+    async def process_images(self, images_input: Union[str, List, None]) -> Tuple[List[str], Optional[str]]:
         """
-        处理各种格式的图片输入，返回本地文件路径列表
+        处理各种格式的图片输入，返回本地文件路径列表和可能的错误信息
         
         支持格式：
-        - 本地路径: "/path/to/image.jpg"
+        - 本地路径: "/path/to/image.jpg" 或 "./relative/path.jpg"
         - 网络地址: "https://example.com/image.jpg"
+        - JSON数组: ["path1.jpg", "path2.jpg"]
+        - 逗号分隔: "path1.jpg,path2.jpg"
         - 混合列表: ["path.jpg", "https://..."]
         
         Args:
             images_input: 图片输入（支持多种格式）
             
         Returns:
-            List[str]: 本地文件路径列表
+            Tuple[List[str], Optional[str]]: (本地文件路径列表, 错误信息)
         """
         logger.info(f"🔍 ImageProcessor.process_images - 输入类型: {type(images_input)}, 内容: {images_input}")
         
         if not images_input:
             logger.info("💭 图片输入为空，返回空列表")
-            return []
+            return [], None
         
         # 统一转换为列表格式
         images_list = self._normalize_to_list(images_input)
@@ -66,6 +75,8 @@ class ImageProcessor:
         
         # 处理每个图片
         local_paths = []
+        failed_images = []
+        
         for idx, img in enumerate(images_list):
             try:
                 logger.info(f"🎯 处理第 {idx+1}/{len(images_list)} 张图片: {img}")
@@ -75,36 +86,77 @@ class ImageProcessor:
                     logger.info(f"✅ 处理图片成功 [{idx+1}/{len(images_list)}]: {local_path}")
                 else:
                     logger.warning(f"⚠️ 处理图片返回None [{idx+1}/{len(images_list)}]: {img}")
+                    failed_images.append(img)
             except Exception as e:
                 logger.error(f"❌ 处理图片失败 [{idx+1}/{len(images_list)}]: {e}")
                 logger.error(f"🔍 失败的图片: {img}")
+                failed_images.append(f"{img} (错误: {str(e)})")
                 continue
         
         logger.info(f"📸 图片处理完成，共处理 {len(local_paths)}/{len(images_list)} 张")
         logger.info(f"📦 最终返回的本地路径: {local_paths}")
-        return local_paths
+        
+        # 生成错误信息
+        error_msg = None
+        if failed_images and not local_paths:
+            error_msg = self._generate_error_message(failed_images, images_input)
+        
+        return local_paths, error_msg
     
     def _normalize_to_list(self, images_input: Union[str, List]) -> List:
         """将各种输入格式统一转换为列表"""
         logger.info(f"🔄 _normalize_to_list - 输入类型: {type(images_input)}")
         
         if isinstance(images_input, str):
-            # 单个字符串，可能是路径或逗号分隔的多个路径
-            if ',' in images_input:
-                # 逗号分隔的多个路径
-                result = [img.strip() for img in images_input.split(',') if img.strip()]
+            images_str = images_input.strip()
+            
+            # 尝试解析 JSON 数组
+            if images_str.startswith('[') and images_str.endswith(']'):
+                try:
+                    parsed = json.loads(images_str)
+                    if isinstance(parsed, list):
+                        result = [str(item).strip() for item in parsed if str(item).strip()]
+                        logger.info(f"📦 JSON数组解析结果: {result}")
+                        return result
+                except json.JSONDecodeError:
+                    # 可能是格式不标准的数组，尝试手动解析
+                    try:
+                        inner = images_str[1:-1].strip()
+                        if inner:
+                            result = [item.strip().strip('"\'') for item in inner.split(',')]
+                            result = [item for item in result if item]
+                            logger.info(f"📦 手动数组解析结果: {result}")
+                            return result
+                    except:
+                        pass
+            
+            # 逗号分隔的多个路径
+            if ',' in images_str:
+                result = [img.strip().strip('"\'') for img in images_str.split(',') if img.strip()]
                 logger.info(f"📦 逗号分隔字符串转换结果: {result}")
                 return result
             else:
-                logger.info(f"📦 单个字符串转换结果: [{images_input}]")
-                return [images_input]
+                # 单个路径
+                logger.info(f"📦 单个字符串转换结果: [{images_str}]")
+                return [images_str]
+                
         elif isinstance(images_input, list):
-            logger.info(f"📦 已是列表格式: {images_input}")
-            return images_input
+            # 确保列表中的每个元素都是字符串
+            result = []
+            for item in images_input:
+                if isinstance(item, str):
+                    result.append(item.strip())
+                else:
+                    result.append(str(item).strip())
+            logger.info(f"📦 列表格式处理结果: {result}")
+            return result
         else:
-            # 其他类型，返回空列表
-            logger.warning(f"⚠️ 不支持的输入类型: {type(images_input)}")
-            return []
+            # 其他类型，尝试转换为字符串
+            logger.warning(f"⚠️ 不常见的输入类型: {type(images_input)}，尝试转换为字符串")
+            try:
+                return self._normalize_to_list(str(images_input))
+            except:
+                return []
     
     async def _process_single_image(self, img_input: str, index: int) -> Optional[str]:
         """
@@ -123,19 +175,45 @@ class ImageProcessor:
             logger.warning(f"⚠️ 无效的图片输入类型: {type(img_input)}, 内容: {img_input}")
             return None
             
+        img_input = img_input.strip()
+        
         # 检查是否是网络地址
         if img_input.startswith(('http://', 'https://')):
             # 网络地址
             logger.info(f"🌐 检测到网络图片URL: {img_input}")
             return await self._download_from_url(img_input, index)
-        elif os.path.exists(img_input):
-            # 本地文件
+        
+        # 尝试解析本地路径
+        # 1. 首先尝试原始路径
+        if os.path.exists(img_input):
             abs_path = os.path.abspath(img_input)
-            logger.info(f"📁 检测到本地图片文件: {abs_path}")
+            logger.info(f"📁 检测到本地图片文件（绝对/相对路径）: {abs_path}")
             return abs_path
-        else:
-            logger.warning(f"⚠️ 无效的图片路径 (文件不存在): {img_input}")
-            return None
+        
+        # 2. 如果是相对路径，尝试从基础目录解析
+        if not os.path.isabs(img_input):
+            base_path = self.base_dir / img_input
+            if base_path.exists():
+                abs_path = str(base_path.resolve())
+                logger.info(f"📁 从基础目录解析相对路径成功: {img_input} -> {abs_path}")
+                return abs_path
+            
+            # 3. 尝试从当前工作目录解析
+            cwd_path = Path.cwd() / img_input
+            if cwd_path.exists():
+                abs_path = str(cwd_path.resolve())
+                logger.info(f"📁 从当前目录解析相对路径成功: {img_input} -> {abs_path}")
+                return abs_path
+        
+        # 路径无效
+        logger.warning(f"⚠️ 无法找到图片文件: {img_input}")
+        logger.info(f"   尝试过的路径:")
+        logger.info(f"   - 原始路径: {img_input}")
+        if not os.path.isabs(img_input):
+            logger.info(f"   - 基础目录: {self.base_dir / img_input}")
+            logger.info(f"   - 当前目录: {Path.cwd() / img_input}")
+        
+        raise FileNotFoundError(f"无法找到图片文件: {img_input}")
     
     async def _download_from_url(self, url: str, index: int) -> Optional[str]:
         """
@@ -222,3 +300,31 @@ class ImageProcessor:
                 
         except Exception as e:
             logger.error(f"清理临时文件出错: {e}")
+    
+    def _generate_error_message(self, failed_images: List[str], original_input) -> str:
+        """
+        生成友好的错误提示信息
+        
+        Args:
+            failed_images: 处理失败的图片列表
+            original_input: 原始输入
+            
+        Returns:
+            str: 错误提示信息
+        """
+        error_parts = ["未能读取到参数中的图片"]
+        
+        if failed_images:
+            error_parts.append(f"\n失败的文件: {', '.join(failed_images[:3])}")
+            if len(failed_images) > 3:
+                error_parts.append(f"... 等共 {len(failed_images)} 个文件")
+        
+        error_parts.append("\n\n请使用以下格式之一：")
+        error_parts.append("1. JSON数组: [\"image1.jpg\", \"image2.jpg\"]")
+        error_parts.append("2. 逗号分隔: \"image1.jpg,image2.jpg\"")
+        error_parts.append("3. 网络图片: \"https://example.com/image.jpg\"")
+        error_parts.append("4. 相对路径: \"./images/photo.jpg\"")
+        error_parts.append("5. 绝对路径: \"/Users/name/Desktop/image.jpg\"")
+        error_parts.append("\n提示: 确保文件路径正确且文件存在")
+        
+        return ''.join(error_parts)

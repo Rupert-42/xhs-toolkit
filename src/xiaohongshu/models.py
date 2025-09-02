@@ -95,19 +95,45 @@ class XHSNote(BaseModel):
         
         # 检查路径格式和文件存在性
         import os
+        from pathlib import Path
+        
+        validated_videos = []
         for video_path in v:
-            if not os.path.isabs(video_path):
-                raise ValueError(f"视频路径必须是绝对路径: {video_path}")
-            if not os.path.exists(video_path):
-                raise ValueError(f"视频文件不存在: {video_path}")
+            # 尝试解析路径
+            if os.path.exists(video_path):
+                abs_path = os.path.abspath(video_path)
+                validated_videos.append(abs_path)
+            else:
+                # 尝试从基础目录解析
+                base_dir = Path(os.environ.get('MCP_WORKING_DIR', os.getcwd()))
+                possible_paths = [
+                    video_path,
+                    base_dir / video_path,
+                    Path.cwd() / video_path
+                ]
+                
+                found = False
+                for path in possible_paths:
+                    if Path(path).exists():
+                        validated_videos.append(str(Path(path).resolve()))
+                        found = True
+                        break
+                
+                if not found:
+                    error_msg = f"未能找到视频文件: {video_path}\n"
+                    error_msg += "请使用以下格式之一：\n"
+                    error_msg += "1. 绝对路径: \"/Users/name/video.mp4\"\n"
+                    error_msg += "2. 相对路径: \"./videos/video.mp4\"\n"
+                    error_msg += "3. 文件名: \"video.mp4\" (当前目录)"
+                    raise ValueError(error_msg)
             
             # 检查文件扩展名
             valid_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.m4v']
-            _, ext = os.path.splitext(video_path.lower())
+            _, ext = os.path.splitext(validated_videos[-1].lower())
             if ext not in valid_extensions:
                 raise ValueError(f"不支持的视频格式: {ext}，支持的格式: {valid_extensions}")
         
-        return v
+        return validated_videos
     
     @field_validator('topics')
     @classmethod
@@ -256,25 +282,50 @@ class XHSNote(BaseModel):
         
         logger.info(f"🏷️ 解析后的话题: {topic_list}")
         
-        # 处理图片（支持URL）
+        # 处理图片（支持URL和相对路径）
         processed_images = None
         if images:
             logger.info(f"🔄 开始处理图片...")
             from ..utils.image_processor import ImageProcessor
-            processor = ImageProcessor()
-            processed_images = await processor.process_images(images)
+            # 传递基础目录用于解析相对路径
+            import os
+            base_dir = os.environ.get('MCP_WORKING_DIR', os.getcwd())
+            processor = ImageProcessor(base_dir=base_dir)
+            processed_images, error_msg = await processor.process_images(images)
+            
+            if error_msg and not processed_images:
+                # 如果没有成功处理任何图片，抛出友好的错误信息
+                raise ValueError(error_msg)
+            
             logger.info(f"✅ 图片处理完成: {processed_images}")
         
-        # 智能解析视频路径（暂时只支持本地文件）
-        video_list = smart_parse_file_paths(videos) if videos else None
-        logger.info(f"🎥 解析后的视频: {video_list}")
+        # 处理视频（支持相对路径）
+        processed_videos = None
+        if videos:
+            logger.info(f"🎬 开始处理视频...")
+            from ..utils.video_processor import VideoProcessor
+            # 传递基础目录用于解析相对路径
+            import os
+            base_dir = os.environ.get('MCP_WORKING_DIR', os.getcwd())
+            processor = VideoProcessor(base_dir=base_dir)
+            processed_videos, error_msg = processor.process_videos(videos)
+            
+            if error_msg and not processed_videos:
+                # 如果没有成功处理任何视频，抛出友好的错误信息
+                raise ValueError(error_msg)
+            
+            logger.info(f"✅ 视频处理完成: {processed_videos}")
+        else:
+            processed_videos = None
+        
+        logger.info(f"🎥 最终视频列表: {processed_videos}")
         
         logger.info(f"🚀 创建XHSNote对象...")
         return cls(
             title=title,
             content=content,
             images=processed_images,
-            videos=video_list,
+            videos=processed_videos,
             topics=topic_list,
             location=location if location else None
         )
