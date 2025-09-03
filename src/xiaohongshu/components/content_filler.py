@@ -17,6 +17,7 @@ from ..constants import (XHSConfig, XHSSelectors, get_title_input_selectors)
 from ...core.exceptions import PublishError, handle_exception
 from ...utils.logger import get_logger
 from ...utils.text_utils import clean_text_for_browser
+from ...utils.emoji_handler import EmojiHandler, smart_input, has_emoji
 
 logger = get_logger(__name__)
 
@@ -257,7 +258,18 @@ class XHSContentFiller(IContentFiller):
             
             # 输入标题
             cleaned_title = clean_text_for_browser(title)
-            title_input.send_keys(cleaned_title)
+            
+            # 检测是否包含 emoji
+            if has_emoji(cleaned_title):
+                logger.info(f"🎯 标题中检测到 emoji，使用智能输入模式")
+                driver = self.browser_manager.driver
+                success = await EmojiHandler.smart_send_keys(driver, title_input, cleaned_title)
+                if not success:
+                    logger.warning("⚠️ 智能输入失败，回退到普通模式")
+                    title_input.send_keys(cleaned_title)
+            else:
+                logger.debug(f"📝 标题为普通文本，使用标准输入")
+                title_input.send_keys(cleaned_title)
             
             # 验证输入是否成功
             await asyncio.sleep(1)
@@ -304,10 +316,24 @@ class XHSContentFiller(IContentFiller):
             
             # 分段输入，避免一次输入过多内容
             lines = cleaned_content.split('\n')
+            driver = self.browser_manager.driver
+            
             for i, line in enumerate(lines):
-                content_editor.send_keys(line)
+                if line:  # 只处理非空行
+                    if has_emoji(line):
+                        logger.info(f"🎯 第{i+1}行检测到 emoji: {line[:30]}...")
+                        success = await EmojiHandler.smart_send_keys(driver, content_editor, line)
+                        if not success:
+                            logger.warning(f"⚠️ 第{i+1}行智能输入失败，回退到普通模式")
+                            content_editor.send_keys(line)
+                    else:
+                        logger.debug(f"📝 第{i+1}行为普通文本")
+                        content_editor.send_keys(line)
+                
                 if i < len(lines) - 1:
                     content_editor.send_keys(Keys.ENTER)
+                    logger.debug(f"⏎ 插入换行符")
+                
                 await asyncio.sleep(0.1)  # 短暂等待
             
             # 验证输入是否成功
@@ -440,10 +466,28 @@ class XHSContentFiller(IContentFiller):
                 actions.click(content_editor)
                 await asyncio.sleep(0.2)
                 
-                # 逐字符输入，每个字符间隔模拟真实打字
-                for char in topic_text:
-                    actions.send_keys(char)
-                    await asyncio.sleep(0.05)  # 短暂间隔模拟打字速度
+                # 检测是否有 emoji
+                if has_emoji(topic_text):
+                    logger.info(f"🎯 话题中检测到 emoji: {topic_text}")
+                    # 分段处理: 普通字符逐个输入，emoji 用 JS 注入
+                    segments = EmojiHandler.split_text_by_emoji(topic_text)
+                    for segment in segments:
+                        if segment['type'] == 'normal':
+                            # 普通字符逐个输入
+                            for char in segment['text']:
+                                actions.send_keys(char)
+                                await asyncio.sleep(0.05)
+                        else:
+                            # emoji 部分用 JS 注入
+                            logger.debug(f"💉 注入 emoji 段: {segment['text']}")
+                            await EmojiHandler.js_inject_text(driver, content_editor, segment['text'], mode='react')
+                            await asyncio.sleep(0.1)
+                else:
+                    logger.debug(f"📝 话题为普通文本，逐字符输入")
+                    # 逐字符输入，每个字符间隔模拟真实打字
+                    for char in topic_text:
+                        actions.send_keys(char)
+                        await asyncio.sleep(0.05)  # 短暂间隔模拟打字速度
                 
                 actions.perform()
                 await asyncio.sleep(0.5)  # 等待输入完成

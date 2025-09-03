@@ -17,6 +17,7 @@ from ..interfaces import IBrowserManager
 from ..constants import XHSConfig
 from ...core.exceptions import PublishError, handle_exception
 from ...utils.logger import get_logger
+from ...utils.emoji_handler import EmojiHandler, has_emoji
 
 logger = get_logger(__name__)
 
@@ -67,10 +68,22 @@ class XHSTopicAutomation:
             if not topic_text.startswith('#'):
                 topic_text = f'#{topic_text}'
             
-            editor.send_keys(topic_text)
+            # 检测是否含有 emoji
+            if has_emoji(topic_text):
+                logger.info(f"🎯 话题中检测到 emoji: {topic_text}")
+                driver = self.browser_manager.driver
+                success = await EmojiHandler.smart_send_keys(driver, editor, topic_text)
+                if not success:
+                    logger.warning("⚠️ Emoji 话题输入失败，尝试降级处理")
+                    editor.send_keys(topic_text)
+            else:
+                logger.debug(f"📝 话题为普通文本: {topic_text}")
+                editor.send_keys(topic_text)
+            
             await asyncio.sleep(0.3)
             
             # 4. 按回车键触发自动转换 (关键步骤!)
+            logger.debug("⏎ 按回车键触发话题转换")
             editor.send_keys(Keys.ENTER)
             await asyncio.sleep(0.5)  # 等待转换完成
             
