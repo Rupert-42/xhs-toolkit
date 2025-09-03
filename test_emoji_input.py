@@ -13,7 +13,9 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.xiaohongshu.refactored_client import XHSPublisher
+from src.xiaohongshu.refactored_client import RefactoredXHSClient
+from src.core.browser import ChromeDriverManager
+from src.core.config import XHSConfig
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,20 +25,30 @@ class EmojiInputTester:
     """Emoji 输入测试器"""
     
     def __init__(self):
+        self.browser_manager = None
+        self.client = None
         self.publisher = None
         self.test_cases = []
         
     async def setup(self):
         """初始化测试环境"""
         logger.info("🚀 初始化测试环境...")
-        self.publisher = XHSPublisher()
-        await self.publisher.init()
+        
+        # 初始化配置和浏览器管理器
+        config = XHSConfig()
+        self.browser_manager = ChromeDriverManager(config)
+        self.browser_manager.create_driver()
+        
+        # 初始化客户端和发布器
+        self.client = RefactoredXHSClient(self.browser_manager)
+        self.publisher = self.client.get_publisher()
+        
         logger.info("✅ 测试环境初始化完成")
         
     async def teardown(self):
         """清理测试环境"""
-        if self.publisher:
-            await self.publisher.close()
+        if self.browser_manager:
+            self.browser_manager.close_driver()
         logger.info("✅ 测试环境清理完成")
     
     def prepare_test_cases(self):
@@ -95,9 +107,11 @@ class EmojiInputTester:
         try:
             # 导航到发布页面
             logger.info("📍 导航到发布页面...")
-            success = await self.publisher.navigate_to_publish_page()
-            if not success:
-                logger.error("❌ 无法导航到发布页面")
+            try:
+                await self.publisher._navigate_to_publish_page()
+                logger.info("✅ 成功导航到发布页面")
+            except Exception as e:
+                logger.error(f"❌ 无法导航到发布页面: {e}")
                 return False
             
             await asyncio.sleep(2)  # 等待页面加载
@@ -217,23 +231,32 @@ class EmojiInputTester:
             elif choice == '1':
                 title = input("请输入包含 emoji 的标题: ").strip()
                 if title:
-                    await self.publisher.navigate_to_publish_page()
-                    result = await self.publisher.content_filler.fill_title(title)
-                    logger.info(f"标题输入结果: {'成功' if result else '失败'}")
+                    try:
+                        await self.publisher._navigate_to_publish_page()
+                        result = await self.publisher.content_filler.fill_title(title)
+                        logger.info(f"标题输入结果: {'成功' if result else '失败'}")
+                    except Exception as e:
+                        logger.error(f"标题测试失败: {e}")
             elif choice == '2':
                 content = input("请输入包含 emoji 的内容 (用 \\n 表示换行): ").strip()
                 if content:
                     content = content.replace('\\n', '\n')
-                    await self.publisher.navigate_to_publish_page()
-                    result = await self.publisher.content_filler.fill_content(content)
-                    logger.info(f"内容输入结果: {'成功' if result else '失败'}")
+                    try:
+                        await self.publisher._navigate_to_publish_page()
+                        result = await self.publisher.content_filler.fill_content(content)
+                        logger.info(f"内容输入结果: {'成功' if result else '失败'}")
+                    except Exception as e:
+                        logger.error(f"内容测试失败: {e}")
             elif choice == '3':
                 topics_str = input("请输入包含 emoji 的话题 (逗号分隔): ").strip()
                 if topics_str:
                     topics = [t.strip() for t in topics_str.split(',')]
-                    await self.publisher.navigate_to_publish_page()
-                    result = await self.publisher.content_filler.fill_topics(topics)
-                    logger.info(f"话题输入结果: {'成功' if result else '失败'}")
+                    try:
+                        await self.publisher._navigate_to_publish_page()
+                        result = await self.publisher.content_filler.fill_topics(topics)
+                        logger.info(f"话题输入结果: {'成功' if result else '失败'}")
+                    except Exception as e:
+                        logger.error(f"话题测试失败: {e}")
             elif choice == '4':
                 await self.run_all_tests()
             else:

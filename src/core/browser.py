@@ -211,6 +211,32 @@ class ChromeDriverManager:
             raise BrowserError(f"导航到创作者中心失败: {str(e)}", browser_action="navigate") from e
     
     @handle_exception
+    def navigate_to(self, url: str) -> None:
+        """
+        导航到指定URL
+        
+        Args:
+            url: 目标URL
+            
+        Raises:
+            BrowserError: 当导航失败时
+        """
+        if not self.driver:
+            raise BrowserError("浏览器驱动未初始化", browser_action="navigate")
+        
+        try:
+            logger.info(f"🌐 导航到: {url}")
+            self.driver.get(url)
+            time.sleep(2)  # 等待页面加载
+            
+            current_url = self.driver.current_url
+            logger.debug(f"当前URL: {current_url}")
+            logger.info("✅ 成功导航到指定页面")
+                
+        except Exception as e:
+            raise BrowserError(f"导航到指定页面失败: {str(e)}", browser_action="navigate") from e
+    
+    @handle_exception
     def load_cookies(self, cookies: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         加载cookies到浏览器

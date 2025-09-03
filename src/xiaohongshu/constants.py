@@ -31,7 +31,12 @@ class XHSSelectors:
     # 内容填写
     TITLE_INPUT = ".d-text"
     TITLE_INPUT_ALT = "[placeholder*='标题']"
+    TITLE_INPUT_WRAP = ".title-wrap input"
+    TITLE_INPUT_EDITABLE = ".editable-textarea"
+    TITLE_CONTAINER = ".textarea-container input"
     CONTENT_EDITOR = ".ql-editor"
+    CONTENT_EDITOR_ALT = ".editable-textarea"
+    CONTENT_TEXTAREA_CONTAINER = ".textarea-container textarea"
     
     # 发布按钮
     PUBLISH_BUTTON = ".publishBtn"
@@ -112,7 +117,10 @@ def get_title_input_selectors() -> List[str]:
     """获取标题输入框选择器列表，按优先级排序"""
     return [
         XHSSelectors.TITLE_INPUT,
-        XHSSelectors.TITLE_INPUT_ALT
+        XHSSelectors.TITLE_INPUT_ALT,
+        XHSSelectors.TITLE_INPUT_WRAP,
+        XHSSelectors.TITLE_INPUT_EDITABLE,
+        XHSSelectors.TITLE_CONTAINER
     ]
 
 
