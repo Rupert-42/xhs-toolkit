@@ -14,7 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-from ..core.config import XHSConfig
+from ..core.config import XHSConfig as CoreConfig
 from ..core.browser import ChromeDriverManager
 from ..core.exceptions import PublishError, NetworkError, handle_exception
 from ..auth.cookie_manager import CookieManager
@@ -22,6 +22,7 @@ from ..utils.text_utils import clean_text_for_browser, truncate_text
 from ..utils.logger import get_logger
 from .models import XHSNote, XHSSearchResult, XHSUser, XHSPublishResult
 from .components.content_filler import XHSContentFiller
+from .constants import XHSConfig
 
 logger = get_logger(__name__)
 
@@ -29,7 +30,7 @@ logger = get_logger(__name__)
 class XHSClient:
     """小红书客户端类"""
     
-    def __init__(self, config: XHSConfig):
+    def __init__(self, config: CoreConfig):
         """
         初始化小红书客户端
         
@@ -1014,7 +1015,7 @@ class XHSClient:
 
 
 # 便捷函数
-def create_xhs_client(config: XHSConfig) -> XHSClient:
+def create_xhs_client(config: CoreConfig) -> XHSClient:
     """
     创建小红书客户端的便捷函数
     
