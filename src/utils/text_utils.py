@@ -8,7 +8,56 @@ import re
 from typing import List, Optional
 
 
-def clean_text_for_browser(text: str) -> str:
+def remove_emoji(text: str) -> str:
+    """
+    移除文本中的所有emoji字符
+    
+    Args:
+        text: 原始文本
+        
+    Returns:
+        移除emoji后的文本
+    """
+    if not text:
+        return ""
+    
+    # 定义多个emoji范围的正则表达式
+    emoji_patterns = [
+        re.compile("[\U0001F600-\U0001F64F]+"),  # 表情符号
+        re.compile("[\U0001F300-\U0001F5FF]+"),  # 各种符号和象形文字  
+        re.compile("[\U0001F680-\U0001F6FF]+"),  # 交通和地图符号
+        re.compile("[\U0001F1E0-\U0001F1FF]+"),  # 国旗
+        re.compile("[\U00002702-\U000027B0]+"),  # Dingbats符号
+        re.compile("[\U0001F900-\U0001F9FF]+"),  # 补充表情符号
+        re.compile("[\U00002600-\U00002B55]+"),  # 杂项符号和形状
+        re.compile("[\U0001FA70-\U0001FAFF]+"),  # 符号和象形文字扩展A
+        re.compile("[\U00002500-\U00002BEF]+"),  # 各种技术符号
+        re.compile("[\U0001F000-\U0001F02F]+"),  # 麻将牌
+        re.compile("[\U0001F0A0-\U0001F0FF]+"),  # 扑克牌
+        re.compile("[\U0001F100-\U0001F1FF]+"),  # 字母数字补充
+        re.compile("[\U0001F200-\U0001F2FF]+"),  # 中日韩兼容表意文字补充
+        re.compile("[\U0001F700-\U0001F77F]+"),  # 炼金术符号
+        re.compile("[\U0001F780-\U0001F7FF]+"),  # 几何形状扩展
+        re.compile("[\U0001F800-\U0001F8FF]+"),  # 补充箭头C
+        re.compile(u"[\u2600-\u26FF]+"),  # 杂项符号
+        re.compile(u"[\u2700-\u27BF]+"),  # Dingbats
+        re.compile(u"[\u2708-\u270D]+"),  # 包含飞机等符号
+        re.compile(u"[\uFE0F]+"),  # 变体选择器
+    ]
+    
+    # 逐个应用正则表达式移除emoji
+    result = text
+    for pattern in emoji_patterns:
+        result = pattern.sub('', result)
+    
+    # 清理多余的空格，但保留换行符
+    result = re.sub(r'[ \t]+', ' ', result)  # 只清理空格和制表符
+    result = re.sub(r' *\n *', '\n', result)  # 清理换行符周围的空格
+    
+    return result.strip()
+
+
+def clean_text_for_browser(text: str, remove_emojis: bool = True) -> str:
     """
     清理文本中ChromeDriver不支持的字符
     
@@ -16,13 +65,18 @@ def clean_text_for_browser(text: str) -> str:
     
     Args:
         text: 原始文本
+        remove_emojis: 是否移除所有emoji（默认True）
         
     Returns:
         清理后的文本
     """
     if not text:
         return ""
-        
+    
+    # 如果需要移除emoji，先进行移除
+    if remove_emojis:
+        text = remove_emoji(text)
+    
     # 移除超出BMP范围的字符（U+10000及以上）
     cleaned_text = ""
     for char in text:

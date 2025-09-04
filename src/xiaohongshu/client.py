@@ -483,10 +483,11 @@ class XHSClient:
             except:
                 logger.warning("⚠️ 清空内容失败，尝试继续")
             
-            # 处理内容，支持换行
+            # 处理内容，支持换行但需要移除emoji
             from selenium.webdriver.common.keys import Keys
-            cleaned_content = note.content  # 不使用clean_text_for_browser，保留原始换行
-            logger.info(f"📝 准备输入内容 (长度: {len(cleaned_content)} 字符)")
+            # 使用clean_text_for_browser移除emoji但保留换行符
+            cleaned_content = clean_text_for_browser(note.content, remove_emojis=True)
+            logger.info(f"📝 准备输入内容 (长度: {len(cleaned_content)} 字符，已移除emoji)")
             
             # 简化处理：直接使用键盘输入，逐行处理
             try:
