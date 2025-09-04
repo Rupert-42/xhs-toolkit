@@ -340,7 +340,13 @@ class XHSClient:
         # 填写标题
         try:
             logger.info("✏️ 填写标题...")
-            title = clean_text_for_browser(truncate_text(note.title, 20))
+            # 检查标题长度
+            if len(note.title) > XHSConfig.MAX_TITLE_LENGTH:
+                raise PublishError(
+                    f"标题长度超过限制：{len(note.title)}字（最多{XHSConfig.MAX_TITLE_LENGTH}字）",
+                    publish_step="标题长度检查"
+                )
+            title = clean_text_for_browser(note.title)
             
             # 尝试多个标题选择器
             title_selectors = [

@@ -59,7 +59,7 @@ class XHSConfig:
     # 文件限制
     MAX_IMAGES = 9
     MAX_VIDEOS = 1
-    MAX_TITLE_LENGTH = 50
+    MAX_TITLE_LENGTH = 20
     MAX_CONTENT_LENGTH = 1000
     MAX_TOPICS = 10
     MAX_TOPIC_LENGTH = 20

@@ -34,8 +34,8 @@ class XHSNote(BaseModel):
         """验证标题"""
         if not v or not v.strip():
             raise ValueError("标题不能为空")
-        if len(v.strip()) > 50:
-            raise ValueError("标题长度不能超过50个字符")
+        if len(v.strip()) > 20:
+            raise ValueError("标题长度不能超过20个字符")
         return v.strip()
     
     @field_validator('content')
