@@ -256,12 +256,21 @@ class XHSContentFiller(IContentFiller):
             title_input.clear()
             await asyncio.sleep(0.5)
             
-            # 输入标题，移除emoji以避免ChromeDriver错误
-            cleaned_title = clean_text_for_browser(title, remove_emojis=True)
+            # 输入标题，支持emoji
+            cleaned_title = title  # 保留原始标题
             
-            # 直接使用标准输入（emoji已被移除）
-            logger.debug(f"📝 输入标题（已移除emoji）")
-            title_input.send_keys(cleaned_title)
+            # 检测是否包含 emoji
+            if has_emoji(cleaned_title):
+                logger.info(f"🎯 标题中检测到 emoji，使用智能输入模式")
+                driver = self.browser_manager.driver
+                success = await EmojiHandler.smart_send_keys(driver, title_input, cleaned_title)
+                if not success:
+                    logger.warning("⚠️ 智能输入失败，回退到普通模式（移除emoji）")
+                    fallback_title = clean_text_for_browser(title, remove_emojis=True)
+                    title_input.send_keys(fallback_title)
+            else:
+                logger.debug(f"📝 标题为普通文本，使用标准输入")
+                title_input.send_keys(cleaned_title)
             
             # 验证输入是否成功
             await asyncio.sleep(1)
@@ -303,24 +312,32 @@ class XHSContentFiller(IContentFiller):
             content_editor.send_keys(Keys.DELETE)
             await asyncio.sleep(0.5)
             
-            # 输入内容，移除emoji以避免ChromeDriver错误
-            cleaned_content = clean_text_for_browser(content, remove_emojis=True)
+            # 输入内容，支持emoji
+            cleaned_content = content  # 保留原始内容
             
-            # 分段输入，避免一次输入过多内容
-            lines = cleaned_content.split('\n')
-            driver = self.browser_manager.driver
-            
-            for i, line in enumerate(lines):
-                if line:  # 只处理非空行
-                    # 直接使用标准输入（emoji已被移除）
-                    logger.debug(f"📝 输入第{i+1}行")
-                    content_editor.send_keys(line)
+            # 检测是否包含emoji，决定输入策略
+            if has_emoji(cleaned_content):
+                logger.info(f"🎯 内容中检测到 emoji，使用智能输入模式")
+                driver = self.browser_manager.driver
+                success = await EmojiHandler.smart_send_keys(driver, content_editor, cleaned_content)
+                if not success:
+                    logger.warning("⚠️ 智能输入失败，回退到普通模式（移除emoji）")
+                    fallback_content = clean_text_for_browser(content, remove_emojis=True)
+                    content_editor.send_keys(fallback_content)
+            else:
+                # 没有emoji，分段输入，避免一次输入过多内容
+                lines = cleaned_content.split('\n')
                 
-                if i < len(lines) - 1:
-                    content_editor.send_keys(Keys.ENTER)
-                    logger.debug(f"⏎ 插入换行符")
-                
-                await asyncio.sleep(0.1)  # 短暂等待
+                for i, line in enumerate(lines):
+                    if line:  # 只处理非空行
+                        logger.debug(f"📝 输入第{i+1}行")
+                        content_editor.send_keys(line)
+                    
+                    if i < len(lines) - 1:
+                        content_editor.send_keys(Keys.ENTER)
+                        logger.debug(f"⏎ 插入换行符")
+                    
+                    await asyncio.sleep(0.1)  # 短暂等待
             
             # 验证输入是否成功
             await asyncio.sleep(1)

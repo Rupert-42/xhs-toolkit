@@ -347,7 +347,8 @@ class XHSClient:
                     f"标题长度超过限制：{len(note.title)}字（最多{XHSConfig.MAX_TITLE_LENGTH}字）",
                     publish_step="标题长度检查"
                 )
-            title = clean_text_for_browser(note.title)
+            # 保留原始标题，包括emoji
+            title = note.title
             
             # 尝试多个标题选择器
             title_selectors = [
@@ -373,7 +374,19 @@ class XHSClient:
                 raise PublishError("无法找到标题输入框", publish_step="查找标题输入框")
             
             title_input.clear()
-            title_input.send_keys(title)
+            
+            # 检查是否包含emoji
+            from ..utils.emoji_handler import EmojiHandler
+            if EmojiHandler.contains_emoji(title):
+                logger.info("🎯 标题包含emoji，使用智能输入")
+                success = await EmojiHandler.smart_send_keys(driver, title_input, title)
+                if not success:
+                    logger.warning("⚠️ emoji输入失败，使用降级方案")
+                    fallback_title = clean_text_for_browser(title, remove_emojis=True)
+                    title_input.send_keys(fallback_title)
+            else:
+                title_input.send_keys(title)
+            
             logger.info(f"✅ 标题已填写: {title}")
             
         except Exception as e:
@@ -483,11 +496,11 @@ class XHSClient:
             except:
                 logger.warning("⚠️ 清空内容失败，尝试继续")
             
-            # 处理内容，支持换行但需要移除emoji
+            # 处理内容，支持换行和emoji
             from selenium.webdriver.common.keys import Keys
-            # 使用clean_text_for_browser移除emoji但保留换行符
-            cleaned_content = clean_text_for_browser(note.content, remove_emojis=True)
-            logger.info(f"📝 准备输入内容 (长度: {len(cleaned_content)} 字符，已移除emoji)")
+            from ..utils.emoji_handler import EmojiHandler
+            cleaned_content = note.content  # 保留原始内容，包括emoji
+            logger.info(f"📝 准备输入内容 (长度: {len(cleaned_content)} 字符)")
             
             # 简化处理：直接使用键盘输入，逐行处理
             try:
@@ -503,22 +516,33 @@ class XHSClient:
                 
                 await asyncio.sleep(0.2)
                 
-                # 逐行输入内容，使用原生的Enter键换行
-                lines = cleaned_content.split('\n')
-                logger.info(f"📋 内容包含 {len(lines)} 行")
-                
-                for i, line in enumerate(lines):
-                    if line:  # 如果行有内容
-                        # 使用原始内容，不做额外清理
-                        content_input.send_keys(line)
+                # 检查是否包含emoji
+                if EmojiHandler.contains_emoji(cleaned_content):
+                    logger.info("🎯 检测到emoji，使用智能输入方式")
+                    # 使用EmojiHandler的智能输入
+                    success = await EmojiHandler.smart_send_keys(driver, content_input, cleaned_content)
+                    if success:
+                        logger.info("✅ emoji内容输入成功")
+                    else:
+                        logger.warning("⚠️ emoji输入失败，尝试降级输入")
+                        # 降级方案：移除emoji后输入
+                        fallback_content = clean_text_for_browser(cleaned_content, remove_emojis=True)
+                        content_input.send_keys(fallback_content)
+                else:
+                    # 没有emoji，使用原生输入（支持换行）
+                    lines = cleaned_content.split('\n')
+                    logger.info(f"📋 内容包含 {len(lines)} 行")
                     
-                    if i < len(lines) - 1:  # 不是最后一行就换行
-                        # 直接使用Enter创建硬换行（新段落），这样在小红书发布时会保留换行
-                        content_input.send_keys(Keys.ENTER)
+                    for i, line in enumerate(lines):
+                        if line:  # 如果行有内容
+                            content_input.send_keys(line)
+                        
+                        if i < len(lines) - 1:  # 不是最后一行就换行
+                            content_input.send_keys(Keys.ENTER)
+                        
+                        await asyncio.sleep(0.1)  # 每行后短暂等待
                     
-                    await asyncio.sleep(0.1)  # 每行后短暂等待
-                
-                logger.info("✅ 已通过键盘输入内容（保留换行）")
+                    logger.info("✅ 已通过键盘输入内容（保留换行）")
                 
             except Exception as e:
                 logger.warning(f"⚠️ 键盘输入出错，尝试直接发送整个内容: {e}")

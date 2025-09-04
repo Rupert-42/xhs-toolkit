@@ -60,11 +60,12 @@ class EmojiHandler:
             "\U0001F300-\U0001F5FF"  # 符号和图标
             "\U0001F680-\U0001F6FF"  # 交通和地图符号
             "\U0001F1E0-\U0001F1FF"  # 国旗
-            "\U00002702-\U000027B0"  # Dingbats
-            "\U000024C2-\U0001F251"  # 封闭字符
             "\U0001F900-\U0001F9FF"  # 补充符号和图标
-            "\U00002600-\U000026FF"  # 杂项符号
-            "\U00002700-\U000027BF"  # Dingbats
+            "\U0001FA70-\U0001FAFF"  # 符号和象形文字扩展A
+            "\u2600-\u26FF"  # 杂项符号
+            "\u2700-\u27BF"  # Dingbats
+            "\u2300-\u23FF"  # 杂项技术符号
+            "\uFE0F"  # 变体选择器
             "]+", 
             flags=re.UNICODE
         )
@@ -155,6 +156,77 @@ class EmojiHandler:
             return 'react'
     
     @staticmethod
+    async def clipboard_paste_text(driver, element: WebElement, text: str) -> bool:
+        """
+        使用 ClipboardEvent API 粘贴文本（最可靠的方法）
+        不依赖系统剪贴板，支持所有字符包括emoji
+        
+        Args:
+            driver: WebDriver 实例
+            element: 目标元素
+            text: 要粘贴的文本（包括emoji）
+            
+        Returns:
+            是否成功
+        """
+        try:
+            # 使用模板字符串避免转义问题
+            js_code = """
+                const element = arguments[0];
+                const text = arguments[1];
+                
+                console.log('📋 使用 ClipboardEvent 粘贴文本:', text);
+                
+                // 聚焦元素
+                element.focus();
+                element.click();
+                
+                // 清空现有内容
+                if (element.tagName.toLowerCase() === 'input' || element.tagName.toLowerCase() === 'textarea') {
+                    element.value = '';
+                } else if (element.contentEditable === 'true') {
+                    element.innerHTML = '';
+                }
+                
+                // 创建 DataTransfer 对象
+                const dataTransfer = new DataTransfer();
+                dataTransfer.setData('text/plain', text);
+                
+                // 创建并触发粘贴事件
+                const pasteEvent = new ClipboardEvent('paste', {
+                    clipboardData: dataTransfer,
+                    bubbles: true,
+                    cancelable: true
+                });
+                
+                const result = element.dispatchEvent(pasteEvent);
+                
+                // 如果粘贴事件被阻止，尝试直接设置值
+                if (!result || (element.value === '' && element.textContent === '')) {
+                    console.log('⚠️ 粘贴事件被阻止，尝试直接设置值');
+                    if (element.tagName.toLowerCase() === 'input' || element.tagName.toLowerCase() === 'textarea') {
+                        element.value = text;
+                    } else {
+                        element.textContent = text;
+                    }
+                    
+                    // 触发相关事件
+                    element.dispatchEvent(new Event('input', {bubbles: true}));
+                    element.dispatchEvent(new Event('change', {bubbles: true}));
+                }
+                
+                console.log('✅ 文本粘贴完成');
+                return true;
+            """
+            
+            result = driver.execute_script(js_code, element, text)
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ ClipboardEvent 粘贴失败: {e}")
+            return False
+    
+    @staticmethod
     async def js_inject_text(driver, element: WebElement, text: str, mode: str = 'auto') -> bool:
         """
         使用 JavaScript 注入文本
@@ -163,12 +235,17 @@ class EmojiHandler:
             driver: WebDriver 实例
             element: 目标元素
             text: 要注入的文本
-            mode: 注入模式 ('auto', 'basic', 'react', 'contenteditable', 'simulate')
+            mode: 注入模式 ('auto', 'basic', 'react', 'contenteditable', 'simulate', 'clipboard')
             
         Returns:
             是否成功
         """
         try:
+            # 如果包含emoji，优先使用clipboard方法
+            if EmojiHandler.contains_emoji(text):
+                logger.info("🎯 检测到emoji，使用ClipboardEvent方法")
+                return await EmojiHandler.clipboard_paste_text(driver, element, text)
+            
             # 自动检测模式
             if mode == 'auto':
                 mode = EmojiHandler.get_element_type(driver, element)
@@ -301,54 +378,22 @@ class EmojiHandler:
                 element.send_keys(text)
                 return True
             
-            # 检查是否需要 JS 注入
-            needs_injection = force_js or EmojiHandler.contains_emoji(text)
+            # 检查是否需要使用特殊处理
+            needs_special_handling = force_js or EmojiHandler.contains_emoji(text)
             
-            if not needs_injection:
+            if not needs_special_handling:
                 # 普通文本，使用原生 send_keys
                 logger.debug(f"📤 使用普通 send_keys 输入: {text[:50]}...")
                 element.send_keys(text)
                 return True
             
-            # 需要 JS 注入
-            logger.info(f"🎯 检测到 emoji，使用 JS 注入方式")
-            
-            # 分段处理（混合模式）
-            segments = EmojiHandler.split_text_by_emoji(text)
-            
-            for i, segment in enumerate(segments):
-                logger.debug(f"📝 处理第 {i+1}/{len(segments)} 段: type={segment['type']}, text={segment['text'][:20]}...")
-                
-                if segment['type'] == 'normal':
-                    # 普通文本用 send_keys
-                    element.send_keys(segment['text'])
-                    logger.debug(f"✅ 普通文本段发送完成")
-                else:
-                    # emoji 用 JS 注入
-                    success = await EmojiHandler.js_inject_text(driver, element, segment['text'])
-                    if not success:
-                        logger.warning(f"⚠️ Emoji 段注入失败，尝试降级处理")
-                        # 降级：尝试直接 send_keys（可能会失败）
-                        try:
-                            element.send_keys(segment['text'])
-                        except Exception as e:
-                            logger.error(f"❌ 降级发送也失败: {e}")
-                            return False
-                    else:
-                        logger.debug(f"✅ Emoji 段注入成功")
-            
-            logger.info(f"✅ 智能文本输入完成，共处理 {len(segments)} 段")
-            return True
+            # 包含emoji或强制JS注入，使用ClipboardEvent方法
+            logger.info(f"🎯 使用 ClipboardEvent 方法输入文本（支持emoji）")
+            return await EmojiHandler.clipboard_paste_text(driver, element, text)
             
         except Exception as e:
             logger.error(f"❌ 智能发送失败: {e}")
-            # 最后的降级方案
-            try:
-                logger.info("🔄 尝试最后的降级方案...")
-                element.send_keys(text.encode('ascii', 'ignore').decode('ascii'))
-                return True
-            except:
-                return False
+            return False
     
     @staticmethod
     async def send_keys_with_enter(driver, element: WebElement, text: str, enter_after: bool = True) -> bool:
