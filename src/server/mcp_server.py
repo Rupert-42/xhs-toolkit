@@ -821,8 +821,8 @@ class MCPServer:
             cookies = self.xhs_client.cookie_manager.load_cookies()
             if cookies and os.getenv('ENABLE_AUTO_COLLECTION', 'false').lower() == 'true':
                 logger.info("📊 初始化数据采集功能...")
-                # stdio模式下使用无头浏览器
-                self.xhs_client.browser_manager.headless = True
+                # 注释掉强制无头模式，允许查看浏览器操作
+                # self.xhs_client.browser_manager.headless = True
                 self.scheduler_initialized = self._initialize_data_collection()
             else:
                 logger.info("ℹ️ 数据采集功能未启用")

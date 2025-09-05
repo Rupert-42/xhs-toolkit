@@ -69,7 +69,7 @@ class XHSConfig:
         # 浏览器选项
         self.disable_images = os.getenv("DISABLE_IMAGES", "false").lower() == "true"
         self.debug_mode = os.getenv("DEBUG_MODE", "false").lower() == "true"
-        self.headless = os.getenv("HEADLESS", "true").lower() == "true"  # 无头浏览器模式，默认为true
+        self.headless = os.getenv("HEADLESS", "false").lower() == "true"  # 无头浏览器模式，默认为false以便查看操作过程
         
         # 远程浏览器连接配置
         self.enable_remote_browser = os.getenv("ENABLE_REMOTE_BROWSER", "false").lower() == "true"
