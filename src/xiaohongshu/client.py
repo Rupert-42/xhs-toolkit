@@ -199,6 +199,7 @@ class XHSClient:
     async def _handle_file_upload(self, note: XHSNote) -> None:
         """统一处理文件上传（图片/视频）"""
         try:
+            import os
             driver = self.browser_manager.driver
             wait = WebDriverWait(driver, 30)
             
@@ -207,10 +208,14 @@ class XHSClient:
             has_video = False
             
             if note.images:
-                files_to_upload.extend(note.images)
+                # 转换为绝对路径
+                abs_images = [os.path.abspath(img) for img in note.images]
+                files_to_upload.extend(abs_images)
                 logger.info(f"📸 准备上传 {len(note.images)} 张图片...")
             if note.videos:
-                files_to_upload.extend(note.videos)
+                # 转换为绝对路径
+                abs_videos = [os.path.abspath(vid) for vid in note.videos]
+                files_to_upload.extend(abs_videos)
                 has_video = True
                 logger.info(f"🎬 准备上传 {len(note.videos)} 个视频...")
             
@@ -248,12 +253,38 @@ class XHSClient:
                         logger.info("✅ 通过XPath找到上传元素")
                     except Exception:
                         logger.error("❌ 无法找到任何文件上传元素")
-                        # 继续执行，可能页面结构已改变
-                        return
+                        raise PublishError("找不到文件上传元素，无法上传图片", publish_step="查找上传元素")
                 
-                # 发送文件路径
-                upload_input.send_keys('\n'.join(files_to_upload))
-                logger.info("✅ 文件上传指令已发送")
+                # 检查input是否支持multiple属性
+                multiple = upload_input.get_attribute('multiple')
+                if multiple is not None:
+                    # 支持多文件上传，使用换行符连接
+                    logger.info("📎 检测到支持多文件上传")
+                    all_files = '\n'.join(files_to_upload)
+                    upload_input.send_keys(all_files)
+                    logger.info(f"✅ 批量上传指令已发送: {len(files_to_upload)} 个文件")
+                else:
+                    # 不支持多文件，逐个上传
+                    logger.info("📎 单文件上传模式")
+                    upload_input.send_keys(files_to_upload[0])
+                    logger.info(f"✅ 文件上传指令已发送: {files_to_upload[0]}")
+                    
+                    # 如果有多个文件，尝试查找其他上传按钮
+                    if len(files_to_upload) > 1:
+                        logger.info("🔄 尝试上传其余文件...")
+                        for i, file_path in enumerate(files_to_upload[1:], 2):
+                            await asyncio.sleep(2)
+                            # 尝试找到新的上传按钮
+                            add_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '添加')]")
+                            if not add_buttons:
+                                raise PublishError(f"无法找到添加按钮上传第{i}个文件", publish_step="多文件上传")
+                            
+                            add_buttons[0].click()
+                            await asyncio.sleep(1)
+                            # 重新查找input
+                            new_input = driver.find_element(By.XPATH, "//input[@type='file']")
+                            new_input.send_keys(file_path)
+                            logger.info(f"✅ 第{i}个文件已上传: {file_path}")
                 
                 # 给时间让上传开始
                 await asyncio.sleep(3)
@@ -266,8 +297,8 @@ class XHSClient:
                     await asyncio.sleep(2)
                     
         except Exception as e:
-            logger.warning(f"⚠️ 处理文件上传时出错: {e}")
-            # 不抛出异常，继续后续流程
+            logger.error(f"❌ 处理文件上传时出错: {e}")
+            raise PublishError(f"文件上传失败: {str(e)}", publish_step="文件上传")
             
     async def _wait_for_video_upload_complete(self) -> None:
         """等待视频上传完成"""
