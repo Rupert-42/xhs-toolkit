@@ -684,13 +684,16 @@ class XHSClient:
         if note.topics and len(note.topics) > 0:
             try:
                 logger.info(f"🏷️ 开始填写话题: {note.topics}")
-                success = await self.content_filler.fill_topics(note.topics)
+                # 使用新的TopicHandler
+                from .components.topic_handler import TopicHandler
+                topic_handler = TopicHandler(self.browser_manager)
+                success = await topic_handler.add_topics(note.topics)
                 if success:
-                    logger.info("✅ 话题填写成功")
+                    logger.info("✅ 话题添加成功")
                 else:
-                    logger.warning("⚠️ 话题填写失败，但继续发布流程")
+                    logger.warning("⚠️ 话题添加失败，但继续发布流程")
             except Exception as e:
-                logger.warning(f"⚠️ 话题填写出错: {e}，继续发布流程")
+                logger.warning(f"⚠️ 话题添加出错: {e}，继续发布流程")
         else:
             logger.info("📋 没有话题需要填写")
         

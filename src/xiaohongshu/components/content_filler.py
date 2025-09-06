@@ -359,12 +359,14 @@ class XHSContentFiller(IContentFiller):
     
     async def _perform_topics_automation(self, topics: List[str]) -> bool:
         """
-        执行话题自动化填写 - 改进版
+        执行话题自动化填写 - 完全重写版
         
         新方法：
-        1. 优先尝试点击"#话题"按钮
-        2. 如果没有按钮，则在内容中输入#触发下拉框
-        3. 输入话题内容后按回车确认
+        1. 在内容编辑器末尾添加换行
+        2. 直接输入完整的 #话题名
+        3. 等待下拉框加载完成（3-10秒）
+        4. 按回车确认选择
+        5. 如果话题不足10个，自动补齐
         
         Args:
             topics: 话题列表
@@ -374,94 +376,156 @@ class XHSContentFiller(IContentFiller):
         """
         try:
             driver = self.browser_manager.driver
-            wait = WebDriverWait(driver, XHSConfig.DEFAULT_WAIT_TIME)
             
-            # 1. 尝试找到"#话题"按钮
-            topic_button = None
-            button_selectors = [
-                "//button[contains(text(), '话题')]",
-                "//span[contains(text(), '#话题')]",
-                "//div[contains(text(), '#话题')]",
-                "//*[contains(@class, 'topic-btn')]",
-                "//*[contains(@class, 'hashtag')]"
-            ]
-            
-            for selector in button_selectors:
-                try:
-                    elements = driver.find_elements(By.XPATH, selector)
-                    for elem in elements:
-                        if elem.is_displayed() and elem.is_enabled():
-                            topic_button = elem
-                            logger.info(f"✅ 找到话题按钮: {selector}")
-                            break
-                    if topic_button:
-                        break
-                except:
-                    continue
-            
-            # 如果找到按钮，使用按钮方式添加话题
-            if topic_button:
-                return await self._add_topics_via_button(topic_button, topics)
-            
-            # 2. 否则，查找内容编辑器，使用输入#的方式
+            # 1. 查找内容编辑器
             content_editor = await self._find_content_editor()
             if not content_editor:
                 logger.error("❌ 未找到内容编辑器，无法添加话题")
                 return False
             
-            logger.info(f"✅ 找到内容编辑器，开始添加 {len(topics)} 个话题")
+            logger.info(f"✅ 找到内容编辑器")
             
-            # 2. 确保编辑器获得焦点并移动到末尾
+            # 2. 限制话题数量最多10个
+            topics_to_add = topics[:10] if len(topics) > 10 else topics
+            logger.info(f"📝 准备添加 {len(topics_to_add)} 个话题")
+            
+            # 3. 确保编辑器获得焦点并移动到末尾
             content_editor.click()
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
             content_editor.send_keys(Keys.END)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.3)
             
-            # 3. 添加换行确保话题在新行
+            # 4. 添加换行确保话题在新行
             content_editor.send_keys(Keys.ENTER)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.5)
             
             success_count = 0
             
-            # 4. 逐个添加话题
-            for i, topic in enumerate(topics):
+            # 5. 逐个添加指定的话题
+            for i, topic in enumerate(topics_to_add):
                 try:
-                    logger.info(f"🏷️ 添加话题 {i+1}/{len(topics)}: {topic}")
+                    logger.info(f"🏷️ 添加话题 {i+1}/{len(topics_to_add)}: {topic}")
                     
-                    # 4.1 使用真实输入方式输入话题 (关键修复!)
+                    # 输入完整的话题文本
                     topic_text = f"#{topic}" if not topic.startswith('#') else topic
-                    success = await self._input_topic_realistically(content_editor, topic_text)
                     
-                    if success:
-                        # 4.2 验证话题转换是否成功
-                        if await self._verify_topic_conversion(topic):
-                            success_count += 1
-                            logger.info(f"✅ 话题 '{topic}' 转换成功")
-                        else:
-                            logger.warning(f"⚠️ 话题 '{topic}' 转换失败，但继续处理")
+                    # 输入话题
+                    content_editor.send_keys(topic_text)
+                    
+                    # 等待下拉框加载（3-10秒）
+                    dropdown_found = await self._wait_for_topic_dropdown(driver)
+                    
+                    if dropdown_found:
+                        # 按回车选择第一个（就是我们输入的）
+                        content_editor.send_keys(Keys.ENTER)
+                        await asyncio.sleep(0.5)
+                        success_count += 1
+                        logger.info(f"✅ 话题 '{topic}' 添加成功")
+                        
+                        # 添加空格分隔下一个话题
+                        if i < len(topics_to_add) - 1:
+                            content_editor.send_keys(" ")
+                            await asyncio.sleep(0.3)
                     else:
-                        logger.warning(f"⚠️ 话题 '{topic}' 输入失败，但继续处理")
-                    
-                    # 4.3 添加空格分隔下一个话题
-                    if i < len(topics) - 1:
-                        content_editor.send_keys(" ")
+                        logger.warning(f"⚠️ 话题 '{topic}' 下拉框未出现")
+                        # 清除输入的文本
+                        for _ in range(len(topic_text)):
+                            content_editor.send_keys(Keys.BACKSPACE)
                         await asyncio.sleep(0.2)
                         
                 except Exception as e:
                     logger.error(f"❌ 添加话题 '{topic}' 时出错: {e}")
                     continue
             
-            # 5. 总结结果
-            if success_count > 0:
-                logger.info(f"✅ 话题添加完成: {success_count}/{len(topics)} 个成功")
-                return True
-            else:
-                logger.error(f"❌ 所有话题添加失败: 0/{len(topics)}")
-                return False
+            # 6. 如果话题不足10个，自动补齐
+            if success_count < 10:
+                logger.info(f"📝 话题不足10个，开始自动补齐...")
+                topics_to_fill = 10 - success_count
+                
+                for i in range(topics_to_fill):
+                    try:
+                        logger.info(f"🏷️ 自动补充话题 {success_count + i + 1}/10")
+                        
+                        # 添加空格（如果不是第一个话题）
+                        if success_count > 0 or i > 0:
+                            content_editor.send_keys(" ")
+                            await asyncio.sleep(0.3)
+                        
+                        # 只输入#号
+                        content_editor.send_keys("#")
+                        
+                        # 等待下拉框加载
+                        dropdown_found = await self._wait_for_topic_dropdown(driver)
+                        
+                        if dropdown_found:
+                            # 直接按回车选择第一个推荐话题
+                            content_editor.send_keys(Keys.ENTER)
+                            await asyncio.sleep(0.5)
+                            success_count += 1
+                            logger.info(f"✅ 自动补充话题成功")
+                        else:
+                            logger.warning(f"⚠️ 自动补充话题失败")
+                            # 删除#号
+                            content_editor.send_keys(Keys.BACKSPACE)
+                            break
+                            
+                    except Exception as e:
+                        logger.error(f"❌ 自动补充话题时出错: {e}")
+                        break
+            
+            # 7. 总结结果
+            logger.info(f"✅ 话题添加完成: 共添加 {success_count} 个话题")
+            return success_count > 0
                 
         except Exception as e:
             logger.error(f"❌ 话题自动化过程出错: {e}")
             return False
+    
+    async def _wait_for_topic_dropdown(self, driver, max_wait_time: int = 10) -> bool:
+        """
+        等待话题下拉框加载完成
+        
+        Args:
+            driver: WebDriver实例
+            max_wait_time: 最大等待时间（秒）
+            
+        Returns:
+            是否找到下拉框
+        """
+        logger.info(f"⏳ 等待话题下拉框加载...")
+        
+        # 下拉框可能的选择器
+        dropdown_selectors = [
+            "//div[contains(@class, 'mention-dropdown')]",
+            "//div[contains(@class, 'topic-dropdown')]",
+            "//div[contains(@class, 'dropdown') and contains(@class, 'topic')]",
+            "//ul[contains(@class, 'dropdown')]",
+            "//div[@role='listbox']",
+            "//div[contains(@class, 'mention') and contains(@class, 'list')]",
+            "//*[contains(@class, 'popover')]//ul",
+            "//*[contains(@class, 'select-dropdown')]"
+        ]
+        
+        start_time = asyncio.get_event_loop().time()
+        
+        while (asyncio.get_event_loop().time() - start_time) < max_wait_time:
+            for selector in dropdown_selectors:
+                try:
+                    elements = driver.find_elements(By.XPATH, selector)
+                    for elem in elements:
+                        if elem.is_displayed():
+                            # 检查下拉框是否有内容
+                            child_items = elem.find_elements(By.XPATH, ".//li | .//div[@role='option'] | .//*[contains(@class, 'item')]")
+                            if child_items and len(child_items) > 0:
+                                logger.info(f"✅ 话题下拉框已加载，包含 {len(child_items)} 个选项")
+                                return True
+                except:
+                    continue
+            
+            await asyncio.sleep(0.5)
+        
+        logger.warning(f"⚠️ 等待 {max_wait_time} 秒后未找到话题下拉框")
+        return False
     
     async def _add_topics_via_button(self, topic_button, topics: List[str]) -> bool:
         """
