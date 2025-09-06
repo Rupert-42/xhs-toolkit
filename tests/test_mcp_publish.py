@@ -15,9 +15,10 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.server.mcp_server import XHSMCPServer
-from src.core.logger import setup_logger
+from src.utils.logger import setup_logger, get_logger
 
-logger = setup_logger()
+setup_logger()
+logger = get_logger()
 
 async def test_mcp_publish_visual():
     """

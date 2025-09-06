@@ -15,9 +15,11 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.xiaohongshu.client import XHSClient
-from src.core.logger import setup_logger
+from src.core.config import XHSConfig
+from src.utils.logger import setup_logger, get_logger
 
-logger = setup_logger()
+setup_logger()
+logger = get_logger()
 
 def create_test_images():
     """创建测试用的图片文件"""
@@ -79,7 +81,8 @@ def test_publish_without_submit():
     
     # 初始化客户端
     logger.info("📱 初始化小红书客户端...")
-    client = XHSClient()
+    config = XHSConfig()
+    client = XHSClient(config)
     
     # 确保浏览器以可视化模式运行
     if hasattr(client, 'browser_manager'):
@@ -126,7 +129,7 @@ def test_publish_without_submit():
         logger.info("\n🌐 启动浏览器（可视化模式）...")
         logger.info("👀 请观察浏览器窗口，查看操作过程")
         
-        browser = client.browser_manager.get_browser()
+        browser = client.browser_manager.create_driver()
         
         # 打开创作页面
         logger.info("\n📝 打开创作页面...")
@@ -186,7 +189,7 @@ def test_publish_without_submit():
         # 清理资源
         logger.info("\n🧹 清理资源...")
         if hasattr(client, 'browser_manager'):
-            client.browser_manager.close_browser()
+            client.browser_manager.close_driver()
         logger.info("✅ 浏览器已关闭")
 
 def main():
