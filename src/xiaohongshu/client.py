@@ -306,14 +306,22 @@ class XHSClient:
             driver = self.browser_manager.driver
             logger.info("🔒 设置笔记为仅自己可见...")
             
+            # 滚动到页面底部，可见范围设置在最底部
+            logger.info("📜 滚动到页面底部查找可见范围设置...")
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(2)  # 等待页面渲染
+            
             # 查找可见范围设置按钮的多种选择器
             visibility_selectors = [
                 "//span[contains(text(), '所有人可见')]",
                 "//div[contains(text(), '所有人可见')]",
                 "//button[contains(text(), '所有人可见')]",
+                "//span[contains(text(), '公开')]",
+                "//div[contains(text(), '公开')]",
                 "[class*='visibility']",
                 "[class*='permission']",
-                "[class*='privacy']"
+                "[class*='privacy']",
+                "[class*='public']"
             ]
             
             visibility_btn = None
@@ -326,9 +334,16 @@ class XHSClient:
                     
                     for element in elements:
                         if element.is_displayed():
-                            visibility_btn = element
-                            logger.info(f"✅ 找到可见范围按钮: {selector}")
-                            break
+                            # 获取元素文本和属性，用于调试
+                            elem_text = element.text or ""
+                            elem_class = element.get_attribute("class") or ""
+                            logger.debug(f"发现元素: text='{elem_text}', class='{elem_class}'")
+                            
+                            # 检查是否是可见范围相关的元素
+                            if "可见" in elem_text or "公开" in elem_text or "permission" in elem_class.lower():
+                                visibility_btn = element
+                                logger.info(f"✅ 找到可见范围按钮: {selector}, 文本: '{elem_text}'")
+                                break
                     if visibility_btn:
                         break
                 except Exception:
@@ -438,10 +453,6 @@ class XHSClient:
             self.content_filler = XHSContentFiller(self.browser_manager)
         
         await asyncio.sleep(2)  # 等待上传完成
-        
-        # 设置可见范围（如果指定）
-        if note.visibility == "private":
-            await self._set_visibility_private()
         
         # 填写标题
         try:
@@ -684,6 +695,10 @@ class XHSClient:
             logger.info("📋 没有话题需要填写")
         
         await asyncio.sleep(2)
+        
+        # 设置可见范围（在所有内容填写完成后）
+        if note.visibility == "private":
+            await self._set_visibility_private()
     
     async def _submit_note(self, note: XHSNote) -> XHSPublishResult:
         """提交发布笔记"""

@@ -1,0 +1,67 @@
+[32m08:48:26[0m | [1mINFO    [0m | [1m
+============================================================[0m
+[32m08:48:26[0m | [1mINFO    [0m | [1m🔍 调试可见范围设置功能[0m
+[32m08:48:26[0m | [1mINFO    [0m | [1m============================================================[0m
+[32m08:48:26[0m | [1mINFO    [0m | [1m🚀 初始化Chrome浏览器驱动...[0m
+[32m08:48:26[0m | [1mINFO    [0m | [1m🖥️ 启用本地浏览器模式[0m
+[32m08:48:27[0m | [1mINFO    [0m | [1m✅ Chrome浏览器驱动初始化成功[0m
+[32m08:48:27[0m | [1mINFO    [0m | [1m🌐 导航到小红书创作者中心...[0m
+[32m08:48:32[0m | [1mINFO    [0m | [1m✅ 成功访问创作者中心[0m
+[32m08:48:32[0m | [1mINFO    [0m | [1m🍪 开始加载 17 个cookies...[0m
+[32m08:48:32[0m | [1mINFO    [0m | [1m✅ Cookies加载完成: 成功 17, 失败 0[0m
+[32m08:48:34[0m | [1mINFO    [0m | [1m🌐 访问发布页面...[0m
+[32m08:48:40[0m | [1mINFO    [0m | [1m🔄 切换到图文模式...[0m
+[32m08:48:40[0m | [31m[1mERROR   [0m | [31m[1m❌ 调试出错: Message: no such element: Unable to locate element: {"method":"xpath","selector":"//div[contains(@class, 'tab') and contains(text(), '图文')]"}
+  (Session info: chrome=140.0.7339.80); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#no-such-element-exception
+Stacktrace:
+0   chromedriver                        0x00000001029cee00 cxxbridge1$str$ptr + 2742224
+1   chromedriver                        0x00000001029c6d00 cxxbridge1$str$ptr + 2709200
+2   chromedriver                        0x00000001025110b8 cxxbridge1$string$len + 90520
+3   chromedriver                        0x00000001025585d8 cxxbridge1$string$len + 382648
+4   chromedriver                        0x0000000102599980 cxxbridge1$string$len + 649824
+5   chromedriver                        0x000000010254c8f4 cxxbridge1$string$len + 334292
+6   chromedriver                        0x0000000102992478 cxxbridge1$str$ptr + 2494024
+7   chromedriver                        0x00000001029956a4 cxxbridge1$str$ptr + 2506868
+8   chromedriver                        0x00000001029733b0 cxxbridge1$str$ptr + 2366848
+9   chromedriver                        0x0000000102995f4c cxxbridge1$str$ptr + 2509084
+10  chromedriver                        0x00000001029644a8 cxxbridge1$str$ptr + 2305656
+11  chromedriver                        0x00000001029b5644 cxxbridge1$str$ptr + 2637844
+12  chromedriver                        0x00000001029b57d0 cxxbridge1$str$ptr + 2638240
+13  chromedriver                        0x00000001029c694c cxxbridge1$str$ptr + 2708252
+14  libsystem_pthread.dylib             0x0000000198e7b2e4 _pthread_start + 136
+15  libsystem_pthread.dylib             0x0000000198e760fc thread_start + 8
+[0m
+[32m08:48:40[0m | [31m[1mERROR   [0m | [31m[1m错误详情:
+Traceback (most recent call last):
+  File "/Users/rupert/mcp_service/xhs-toolkit/tests/debug_visibility.py", line 67, in debug_visibility_setting
+    image_tab = driver.find_element(By.XPATH, "//div[contains(@class, 'tab') and contains(text(), '图文')]")
+  File "/Users/rupert/mcp_service/xhs-toolkit/.venv/lib/python3.10/site-packages/selenium/webdriver/remote/webdriver.py", line 914, in find_element
+    return self.execute(Command.FIND_ELEMENT, {"using": by, "value": value})["value"]
+  File "/Users/rupert/mcp_service/xhs-toolkit/.venv/lib/python3.10/site-packages/selenium/webdriver/remote/webdriver.py", line 447, in execute
+    self.error_handler.check_response(response)
+  File "/Users/rupert/mcp_service/xhs-toolkit/.venv/lib/python3.10/site-packages/selenium/webdriver/remote/errorhandler.py", line 232, in check_response
+    raise exception_class(message, screen, stacktrace)
+selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {"method":"xpath","selector":"//div[contains(@class, 'tab') and contains(text(), '图文')]"}
+  (Session info: chrome=140.0.7339.80); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#no-such-element-exception
+Stacktrace:
+0   chromedriver                        0x00000001029cee00 cxxbridge1$str$ptr + 2742224
+1   chromedriver                        0x00000001029c6d00 cxxbridge1$str$ptr + 2709200
+2   chromedriver                        0x00000001025110b8 cxxbridge1$string$len + 90520
+3   chromedriver                        0x00000001025585d8 cxxbridge1$string$len + 382648
+4   chromedriver                        0x0000000102599980 cxxbridge1$string$len + 649824
+5   chromedriver                        0x000000010254c8f4 cxxbridge1$string$len + 334292
+6   chromedriver                        0x0000000102992478 cxxbridge1$str$ptr + 2494024
+7   chromedriver                        0x00000001029956a4 cxxbridge1$str$ptr + 2506868
+8   chromedriver                        0x00000001029733b0 cxxbridge1$str$ptr + 2366848
+9   chromedriver                        0x0000000102995f4c cxxbridge1$str$ptr + 2509084
+10  chromedriver                        0x00000001029644a8 cxxbridge1$str$ptr + 2305656
+11  chromedriver                        0x00000001029b5644 cxxbridge1$str$ptr + 2637844
+12  chromedriver                        0x00000001029b57d0 cxxbridge1$str$ptr + 2638240
+13  chromedriver                        0x00000001029c694c cxxbridge1$str$ptr + 2708252
+14  libsystem_pthread.dylib             0x0000000198e7b2e4 _pthread_start + 136
+15  libsystem_pthread.dylib             0x0000000198e760fc thread_start + 8
+
+[0m
+⚠️ 未找到配置文件: .env
+💡 程序将使用默认配置运行，建议创建配置文件以实现自定义设置
+

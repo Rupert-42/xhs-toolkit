@@ -359,17 +359,12 @@ class XHSContentFiller(IContentFiller):
     
     async def _perform_topics_automation(self, topics: List[str]) -> bool:
         """
-        执行话题自动化填写 - 基于实测验证的完整实现
+        执行话题自动化填写 - 改进版
         
-        关键修复：使用真实输入方式触发话题下拉菜单
-        - 对比测试证明：直接send_keys不能触发下拉菜单
-        - 正确方式：模拟真实用户逐字符输入 + 等待下拉菜单 + 回车确认
-        
-        实现逻辑：
-        1. 定位到内容编辑器(.ql-editor)
-        2. 对每个话题执行：真实输入#话题名 + 等待下拉菜单 + 按Enter键
-        3. 验证是否生成了.mention元素(真正的话题标签)
-        4. 支持重试机制处理偶发性失败
+        新方法：
+        1. 优先尝试点击"#话题"按钮
+        2. 如果没有按钮，则在内容中输入#触发下拉框
+        3. 输入话题内容后按回车确认
         
         Args:
             topics: 话题列表
@@ -381,7 +376,34 @@ class XHSContentFiller(IContentFiller):
             driver = self.browser_manager.driver
             wait = WebDriverWait(driver, XHSConfig.DEFAULT_WAIT_TIME)
             
-            # 1. 查找内容编辑器
+            # 1. 尝试找到"#话题"按钮
+            topic_button = None
+            button_selectors = [
+                "//button[contains(text(), '话题')]",
+                "//span[contains(text(), '#话题')]",
+                "//div[contains(text(), '#话题')]",
+                "//*[contains(@class, 'topic-btn')]",
+                "//*[contains(@class, 'hashtag')]"
+            ]
+            
+            for selector in button_selectors:
+                try:
+                    elements = driver.find_elements(By.XPATH, selector)
+                    for elem in elements:
+                        if elem.is_displayed() and elem.is_enabled():
+                            topic_button = elem
+                            logger.info(f"✅ 找到话题按钮: {selector}")
+                            break
+                    if topic_button:
+                        break
+                except:
+                    continue
+            
+            # 如果找到按钮，使用按钮方式添加话题
+            if topic_button:
+                return await self._add_topics_via_button(topic_button, topics)
+            
+            # 2. 否则，查找内容编辑器，使用输入#的方式
             content_editor = await self._find_content_editor()
             if not content_editor:
                 logger.error("❌ 未找到内容编辑器，无法添加话题")
@@ -441,6 +463,76 @@ class XHSContentFiller(IContentFiller):
             logger.error(f"❌ 话题自动化过程出错: {e}")
             return False
     
+    async def _add_topics_via_button(self, topic_button, topics: List[str]) -> bool:
+        """
+        通过点击话题按钮添加话题
+        
+        Args:
+            topic_button: 话题按钮元素
+            topics: 话题列表
+            
+        Returns:
+            是否成功
+        """
+        try:
+            driver = self.browser_manager.driver
+            success_count = 0
+            
+            for i, topic in enumerate(topics):
+                try:
+                    logger.info(f"🏷️ 通过按钮添加话题 {i+1}/{len(topics)}: {topic}")
+                    
+                    # 点击话题按钮
+                    topic_button.click()
+                    await asyncio.sleep(1)
+                    
+                    # 查找话题输入框
+                    input_selectors = [
+                        "//input[@placeholder*='话题']",
+                        "//input[@placeholder*='搜索']",
+                        "//input[contains(@class, 'topic')]",
+                        "//div[@role='textbox']",
+                        "//input[@type='text']"
+                    ]
+                    
+                    topic_input = None
+                    for selector in input_selectors:
+                        try:
+                            inputs = driver.find_elements(By.XPATH, selector)
+                            for inp in inputs:
+                                if inp.is_displayed():
+                                    topic_input = inp
+                                    break
+                            if topic_input:
+                                break
+                        except:
+                            continue
+                    
+                    if topic_input:
+                        # 输入话题名称
+                        topic_input.clear()
+                        topic_input.send_keys(topic)
+                        await asyncio.sleep(1)
+                        
+                        # 按回车或点击确认
+                        topic_input.send_keys(Keys.ENTER)
+                        await asyncio.sleep(0.5)
+                        
+                        success_count += 1
+                        logger.info(f"✅ 话题 '{topic}' 添加成功")
+                    else:
+                        logger.warning(f"⚠️ 未找到话题输入框")
+                        
+                except Exception as e:
+                    logger.error(f"❌ 添加话题 '{topic}' 失败: {e}")
+                    continue
+            
+            return success_count > 0
+            
+        except Exception as e:
+            logger.error(f"❌ 通过按钮添加话题失败: {e}")
+            return False
+    
     async def _input_topic_realistically(self, content_editor, topic_text: str) -> bool:
         """
         使用真实用户输入方式输入话题
@@ -482,31 +574,39 @@ class XHSContentFiller(IContentFiller):
                 content_editor.send_keys(topic_name)
                 await asyncio.sleep(0.8)  # 等待搜索结果
                 
-                # 3. 尝试从下拉菜单选择第一个匹配项
+                # 3. 等待下拉菜单出现并尝试选择
+                await asyncio.sleep(1)  # 给下拉菜单更多时间出现
+                
                 try:
-                    # 查找下拉菜单
+                    # 查找下拉菜单选项
                     dropdown_selectors = [
+                        f"//div[contains(@class, 'mention')]//span[contains(text(), '{topic_name}')]",
+                        f"//div[contains(@class, 'dropdown')]//div[contains(text(), '{topic_name}')]",
+                        "//div[contains(@class, 'mention-dropdown')]//div[1]",
                         "//div[contains(@class, 'topic-dropdown')]//li[1]",
                         "//div[contains(@class, 'dropdown')]//li[1]",
                         "//ul[contains(@class, 'dropdown')]//li[1]",
                         "//div[@role='listbox']//div[@role='option'][1]"
                     ]
                     
+                    dropdown_found = False
                     for selector in dropdown_selectors:
                         try:
                             dropdown_item = driver.find_element(By.XPATH, selector)
                             if dropdown_item.is_displayed():
                                 dropdown_item.click()
                                 logger.debug(f"✅ 从下拉菜单选择了话题")
-                                await asyncio.sleep(0.3)
+                                dropdown_found = True
+                                await asyncio.sleep(0.5)
                                 return True
                         except:
                             continue
                     
-                    # 如果没有下拉菜单，直接按回车
-                    logger.debug("📌 未找到下拉菜单，直接按回车")
-                    content_editor.send_keys(Keys.ENTER)
-                    await asyncio.sleep(0.3)
+                    # 如果没有找到下拉菜单项，直接按回车完成话题输入
+                    if not dropdown_found:
+                        logger.debug("📌 未找到下拉菜单项，按回车创建话题")
+                        content_editor.send_keys(Keys.ENTER)
+                        await asyncio.sleep(0.5)
                     
                 except Exception as e:
                     logger.debug(f"⚠️ 选择下拉菜单失败，按回车: {e}")
