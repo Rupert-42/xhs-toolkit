@@ -700,7 +700,16 @@ class XHSClient:
                 self.browser_manager.take_screenshot(screenshot_path)
                 logger.info(f"📸 预览截图已保存: {screenshot_path}")
                 
-                # 等待几秒让用户查看
+                # 在dry_run模式下，保持浏览器打开供查看
+                logger.info("⏰ 保持浏览器打开30秒供查看...")
+                logger.info("📌 你可以检查：")
+                logger.info("   - 图片是否上传成功")
+                logger.info("   - 标题和内容是否正确")
+                logger.info("   - 话题标签是否添加")
+                logger.info("   - 可见范围设置")
+                await asyncio.sleep(30)
+                
+                logger.info("⏰ 即将关闭浏览器...")
                 await asyncio.sleep(3)
                 
                 return XHSPublishResult(
