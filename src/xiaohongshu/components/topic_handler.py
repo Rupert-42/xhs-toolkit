@@ -63,10 +63,7 @@ class TopicHandler:
                 
                 if await self._add_single_topic(driver, content_editor, topic):
                     success_count += 1
-                    # 添加空格分隔
-                    if i < len(topics_to_add) - 1:
-                        content_editor.send_keys(" ")
-                        await asyncio.sleep(0.3)
+                    # 空格已在_add_single_topic中添加
                 else:
                     logger.warning(f"⚠️ 话题 '{topic}' 添加失败")
             
@@ -120,57 +117,85 @@ class TopicHandler:
                 continue
         return None
     
-    async def _add_single_topic(self, driver, editor, topic: str) -> bool:
+    async def _add_single_topic(self, driver, editor, topic: str, max_retries: int = 2) -> bool:
         """
-        添加单个话题
+        添加单个话题（带重试机制）
         
         Args:
             driver: WebDriver实例
             editor: 编辑器元素
             topic: 话题名称
+            max_retries: 最大重试次数
             
         Returns:
             是否成功
         """
-        try:
-            # 1. 输入完整的话题文本
-            topic_text = f"#{topic}" if not topic.startswith('#') else topic
-            logger.info(f"📝 输入: {topic_text}")
-            
-            # 记录输入前的内容
-            before_input = editor.text
-            
-            # 输入话题
-            editor.send_keys(topic_text)
-            await asyncio.sleep(0.5)
-            
-            # 2. 等待弹框出现
-            if await self._wait_for_dropdown(driver):
-                # 3. 按回车选择第一个
-                editor.send_keys(Keys.ENTER)
-                await asyncio.sleep(0.5)
+        retry_count = 0
+        while retry_count <= max_retries:
+            try:
+                if retry_count > 0:
+                    logger.info(f"🔄 重试 {retry_count}/{max_retries} - 话题: {topic}")
                 
-                # 4. 验证话题是否成功转换
-                after_input = editor.text
+                # 1. 输入完整的话题文本
+                topic_text = f"#{topic}" if not topic.startswith('#') else topic
+                logger.info(f"📝 输入: {topic_text}")
                 
-                # 检查是否生成了话题标签（通常会变成特殊格式）
-                if topic_text not in after_input or len(after_input) < len(before_input) + len(topic):
-                    logger.info(f"✅ 话题 '{topic}' 成功转换为标签")
-                    return True
+                # 记录输入前的内容
+                before_input = editor.text
+                
+                # 输入话题
+                editor.send_keys(topic_text)
+                await asyncio.sleep(1)  # 给更多时间让弹框出现
+                
+                # 2. 等待弹框出现（减少等待时间以便快速重试）
+                dropdown_found = await self._wait_for_dropdown(driver, max_wait=5)
+                
+                if dropdown_found:
+                    logger.info("📌 检测到弹框，按回车确认")
+                    # 3. 按回车选择第一个
+                    editor.send_keys(Keys.ENTER)
+                    await asyncio.sleep(0.8)
+                    
+                    # 4. 验证话题是否成功转换
+                    after_input = editor.text
+                    
+                    # 检查是否生成了话题标签（通常会变成特殊格式）
+                    if topic_text not in after_input or len(after_input) < len(before_input) + len(topic):
+                        logger.info(f"✅ 话题 '{topic}' 成功转换为标签")
+                        # 添加空格分隔
+                        editor.send_keys(" ")
+                        await asyncio.sleep(0.3)
+                        return True
+                    else:
+                        logger.warning(f"⚠️ 话题 '{topic}' 可能未成功转换")
+                        # 即使不确定也添加空格
+                        editor.send_keys(" ")
+                        await asyncio.sleep(0.3)
+                        return True
                 else:
-                    logger.warning(f"⚠️ 话题 '{topic}' 可能未成功转换")
-                    return True  # 即使不确定也继续
-            else:
-                # 如果没有弹框，删除输入的文本
-                logger.warning(f"⚠️ 未检测到话题弹框，删除输入")
-                for _ in range(len(topic_text)):
-                    editor.send_keys(Keys.BACKSPACE)
-                await asyncio.sleep(0.3)
+                    # 如果没有弹框，删除输入的文本并重试
+                    logger.warning(f"⚠️ 未检测到话题弹框")
+                    for _ in range(len(topic_text)):
+                        editor.send_keys(Keys.BACKSPACE)
+                    await asyncio.sleep(0.5)
+                    
+                    # 如果还有重试机会，继续尝试
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        continue
+                    else:
+                        logger.error(f"❌ 话题 '{topic}' 添加失败（已重试{max_retries}次）")
+                        return False
+                    
+            except Exception as e:
+                logger.error(f"❌ 添加话题 '{topic}' 时出错: {e}")
+                if retry_count < max_retries:
+                    retry_count += 1
+                    await asyncio.sleep(1)
+                    continue
                 return False
-                
-        except Exception as e:
-            logger.error(f"❌ 添加话题 '{topic}' 时出错: {e}")
-            return False
+        
+        return False
     
     async def _add_auto_topic(self, driver, editor) -> bool:
         """
@@ -219,27 +244,35 @@ class TopicHandler:
         """
         logger.info(f"⏳ 等待话题弹框加载（最多{max_wait}秒）...")
         
-        # 根据实际页面，弹框可能的选择器
+        # 根据实际页面，弹框可能的选择器 - 改进选择器
         dropdown_selectors = [
-            # 更通用的选择器
-            "//div[contains(@style, 'position') and contains(@style, 'absolute')]//ul",
-            "//div[contains(@style, 'position') and contains(@style, 'fixed')]//ul",
+            # 小红书特定选择器
+            "//div[contains(@style, 'position') and contains(@style, 'display')]",
+            "//div[@data-popover-root]",
+            "//div[@data-radix-popper-content-wrapper]",
+            # 更通用的浮层选择器
+            "//div[contains(@style, 'position: absolute')]",
+            "//div[contains(@style, 'position: fixed')]",
+            "//div[contains(@style, 'z-index')]",
             # 基于class的选择器
             "//div[contains(@class, 'mention')]",
             "//div[contains(@class, 'dropdown')]",
             "//div[contains(@class, 'suggest')]",
             "//div[contains(@class, 'popover')]",
+            "//div[contains(@class, 'autocomplete')]",
             "//ul[contains(@class, 'mention')]",
             # 基于属性的选择器
             "//*[@role='listbox']",
             "//*[@role='menu']",
+            "//*[@role='dialog']",
             "//div[@data-mentionable]",
             # CSS选择器
             ".mention-dropdown",
             ".topic-suggestions",
-            ".dropdown-menu:visible",
-            "[class*='mention']:visible",
-            "[class*='suggest']:visible"
+            ".dropdown-menu",
+            "[class*='mention']",
+            "[class*='suggest']",
+            "[class*='popover']"
         ]
         
         start_time = asyncio.get_event_loop().time()
