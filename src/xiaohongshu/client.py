@@ -300,6 +300,76 @@ class XHSClient:
             logger.error(f"❌ 处理文件上传时出错: {e}")
             raise PublishError(f"文件上传失败: {str(e)}", publish_step="文件上传")
             
+    async def _set_visibility_private(self) -> None:
+        """设置笔记为仅自己可见"""
+        try:
+            driver = self.browser_manager.driver
+            logger.info("🔒 设置笔记为仅自己可见...")
+            
+            # 查找可见范围设置按钮的多种选择器
+            visibility_selectors = [
+                "//span[contains(text(), '所有人可见')]",
+                "//div[contains(text(), '所有人可见')]",
+                "//button[contains(text(), '所有人可见')]",
+                "[class*='visibility']",
+                "[class*='permission']",
+                "[class*='privacy']"
+            ]
+            
+            visibility_btn = None
+            for selector in visibility_selectors:
+                try:
+                    if selector.startswith("//"):
+                        elements = driver.find_elements(By.XPATH, selector)
+                    else:
+                        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    
+                    for element in elements:
+                        if element.is_displayed():
+                            visibility_btn = element
+                            logger.info(f"✅ 找到可见范围按钮: {selector}")
+                            break
+                    if visibility_btn:
+                        break
+                except Exception:
+                    continue
+            
+            if visibility_btn:
+                visibility_btn.click()
+                await asyncio.sleep(1)
+                
+                # 选择"仅自己可见"选项
+                private_selectors = [
+                    "//span[contains(text(), '仅自己可见')]",
+                    "//div[contains(text(), '仅自己可见')]",
+                    "//li[contains(text(), '仅自己可见')]",
+                    "[data-value='private']",
+                    "[value='private']"
+                ]
+                
+                for selector in private_selectors:
+                    try:
+                        if selector.startswith("//"):
+                            private_option = driver.find_element(By.XPATH, selector)
+                        else:
+                            private_option = driver.find_element(By.CSS_SELECTOR, selector)
+                        
+                        if private_option.is_displayed():
+                            private_option.click()
+                            logger.info("✅ 已设置为仅自己可见")
+                            await asyncio.sleep(1)
+                            return
+                    except Exception:
+                        continue
+                
+                logger.warning("⚠️ 未找到'仅自己可见'选项")
+            else:
+                logger.warning("⚠️ 未找到可见范围设置按钮")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ 设置可见范围失败: {e}")
+            # 不抛出异常，继续后续流程
+    
     async def _wait_for_video_upload_complete(self) -> None:
         """等待视频上传完成"""
         try:
@@ -368,6 +438,10 @@ class XHSClient:
             self.content_filler = XHSContentFiller(self.browser_manager)
         
         await asyncio.sleep(2)  # 等待上传完成
+        
+        # 设置可见范围（如果指定）
+        if note.visibility == "private":
+            await self._set_visibility_private()
         
         # 填写标题
         try:
@@ -616,6 +690,26 @@ class XHSClient:
         driver = self.browser_manager.driver
         
         try:
+            # 检查是否为dry-run模式
+            if note.dry_run:
+                logger.info("🔍 DRY-RUN模式：不点击发布按钮")
+                logger.info("✅ 笔记内容已准备完成，但未实际发布")
+                
+                # 截图保存当前状态
+                screenshot_path = "dry_run_preview.png"
+                self.browser_manager.take_screenshot(screenshot_path)
+                logger.info(f"📸 预览截图已保存: {screenshot_path}")
+                
+                # 等待几秒让用户查看
+                await asyncio.sleep(3)
+                
+                return XHSPublishResult(
+                    success=True,
+                    message="DRY-RUN完成：笔记已准备但未发布",
+                    note_title=note.title,
+                    final_url="dry-run-no-url"
+                )
+            
             logger.info("🚀 点击发布按钮...")
             
             # 尝试多个发布按钮选择器

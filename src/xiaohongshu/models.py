@@ -27,6 +27,8 @@ class XHSNote(BaseModel):
     videos: Optional[List[str]] = None
     topics: Optional[List[str]] = None
     location: Optional[str] = None
+    visibility: Optional[str] = None  # 可见范围: "public"(公开) 或 "private"(仅自己可见)
+    dry_run: bool = False  # 是否为测试模式，不实际发布
     
     @field_validator('title')
     @classmethod

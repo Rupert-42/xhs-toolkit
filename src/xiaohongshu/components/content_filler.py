@@ -463,39 +463,57 @@ class XHSContentFiller(IContentFiller):
             
             logger.debug(f"🔧 使用改进的真实输入方式: {topic_text}")
             
-            # 方法1: 使用Actions类逐字符输入（最接近真实用户行为）
+            # 改进的方法：先输入#号，等待下拉菜单，再输入话题文本
             try:
                 actions = ActionChains(driver)
                 actions.click(content_editor)
                 await asyncio.sleep(0.2)
                 
-                # 检测是否有 emoji
-                if has_emoji(topic_text):
-                    logger.info(f"🎯 话题中检测到 emoji: {topic_text}")
-                    # 分段处理: 普通字符逐个输入，emoji 用 JS 注入
-                    segments = EmojiHandler.split_text_by_emoji(topic_text)
-                    for segment in segments:
-                        if segment['type'] == 'normal':
-                            # 普通字符逐个输入
-                            for char in segment['text']:
-                                actions.send_keys(char)
-                                await asyncio.sleep(0.05)
-                        else:
-                            # emoji 部分用 JS 注入
-                            logger.debug(f"💉 注入 emoji 段: {segment['text']}")
-                            await EmojiHandler.js_inject_text(driver, content_editor, segment['text'], mode='react')
-                            await asyncio.sleep(0.1)
-                else:
-                    logger.debug(f"📝 话题为普通文本，逐字符输入")
-                    # 逐字符输入，每个字符间隔模拟真实打字
-                    for char in topic_text:
-                        actions.send_keys(char)
-                        await asyncio.sleep(0.05)  # 短暂间隔模拟打字速度
+                # 分离#号和话题文本
+                topic_name = topic_text[1:] if topic_text.startswith('#') else topic_text
                 
-                actions.perform()
-                await asyncio.sleep(0.5)  # 等待输入完成
+                logger.debug(f"📝 输入话题: #{topic_name}")
                 
-                logger.debug("✅ Actions逐字符输入完成")
+                # 1. 先输入#号
+                content_editor.send_keys("#")
+                await asyncio.sleep(0.5)  # 等待下拉菜单出现
+                
+                # 2. 输入话题名称
+                content_editor.send_keys(topic_name)
+                await asyncio.sleep(0.8)  # 等待搜索结果
+                
+                # 3. 尝试从下拉菜单选择第一个匹配项
+                try:
+                    # 查找下拉菜单
+                    dropdown_selectors = [
+                        "//div[contains(@class, 'topic-dropdown')]//li[1]",
+                        "//div[contains(@class, 'dropdown')]//li[1]",
+                        "//ul[contains(@class, 'dropdown')]//li[1]",
+                        "//div[@role='listbox']//div[@role='option'][1]"
+                    ]
+                    
+                    for selector in dropdown_selectors:
+                        try:
+                            dropdown_item = driver.find_element(By.XPATH, selector)
+                            if dropdown_item.is_displayed():
+                                dropdown_item.click()
+                                logger.debug(f"✅ 从下拉菜单选择了话题")
+                                await asyncio.sleep(0.3)
+                                return True
+                        except:
+                            continue
+                    
+                    # 如果没有下拉菜单，直接按回车
+                    logger.debug("📌 未找到下拉菜单，直接按回车")
+                    content_editor.send_keys(Keys.ENTER)
+                    await asyncio.sleep(0.3)
+                    
+                except Exception as e:
+                    logger.debug(f"⚠️ 选择下拉菜单失败，按回车: {e}")
+                    content_editor.send_keys(Keys.ENTER)
+                    await asyncio.sleep(0.3)
+                
+                logger.debug("✅ 话题输入完成")
                 
             except Exception as e:
                 logger.warning(f"⚠️ Actions输入失败，尝试JavaScript方法: {e}")
